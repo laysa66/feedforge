@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Boxes, Coins, Cpu, Trash2 } from "lucide-react";
 import { getUsage, clearUsage, type UsageRecord } from "@/lib/storage";
 import { getModel } from "@/lib/models";
+import CountUp from "@/components/CountUp";
 
 function fmtUsd(n: number) {
   return n < 0.01 ? `${(n * 100).toFixed(2)} ¢` : `${n.toFixed(2)} $`;
@@ -58,13 +59,23 @@ export default function DashboardPage() {
   }
 
   const cards = [
-    { icon: Boxes, label: "Fiches générées", value: totals.count.toLocaleString("fr-FR") },
+    {
+      icon: Boxes,
+      label: "Fiches générées",
+      node: <CountUp value={totals.count} />,
+    },
     {
       icon: Cpu,
       label: "Tokens consommés",
-      value: (totals.inputTokens + totals.outputTokens).toLocaleString("fr-FR"),
+      node: <CountUp value={totals.inputTokens + totals.outputTokens} />,
     },
-    { icon: Coins, label: "Coût estimé total", value: fmtUsd(totals.costUsd) },
+    {
+      icon: Coins,
+      label: "Coût estimé total",
+      node: (
+        <CountUp value={totals.costUsd} decimals={2} suffix=" $" />
+      ),
+    },
   ];
 
   return (
@@ -87,25 +98,30 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        {cards.map(({ icon: Icon, label, value }) => (
-          <div key={label} className="rounded-2xl border border-border bg-surface p-5">
+        {cards.map(({ icon: Icon, label, node }) => (
+          <div
+            key={label}
+            className="glass rounded-2xl p-5 transition hover:border-[color:var(--border-glow)]"
+          >
             <div className="flex items-center gap-2 text-muted">
-              <Icon size={16} />
+              <Icon size={16} className="text-brand-2" />
               <span className="text-sm">{label}</span>
             </div>
-            <p className="mt-2 text-3xl font-bold tracking-tight">{value}</p>
+            <p className="mt-2 font-display text-3xl font-bold tracking-tight">
+              {node}
+            </p>
           </div>
         ))}
       </div>
 
       {usage.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-surface p-10 text-center text-muted">
+        <div className="glass rounded-2xl border-dashed p-10 text-center text-muted">
           Aucune génération pour l&apos;instant. Lancez votre première fiche dans
           l&apos;onglet « Générer ».
         </div>
       ) : (
         <>
-          <div className="rounded-2xl border border-border bg-surface p-5">
+          <div className="glass rounded-2xl p-5">
             <h2 className="mb-4 text-sm font-medium text-muted">
               Coût estimé par jour
             </h2>
@@ -125,7 +141,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-border">
+          <div className="glass overflow-hidden rounded-2xl">
             <table className="w-full border-collapse text-sm">
               <thead className="bg-surface-2 text-left text-muted">
                 <tr>

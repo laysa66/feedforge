@@ -1,5 +1,7 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Boxes, KeyRound, LineChart, FileSpreadsheet, ArrowRight } from "lucide-react";
+import logo from "@/app/icon.png";
 
 const features = [
   {
@@ -23,13 +25,22 @@ export default function Home() {
   return (
     <div className="space-y-16">
       <section className="text-center">
-        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-xs text-muted">
+        <Image
+          src={logo}
+          alt="FeedForge"
+          width={112}
+          height={112}
+          priority
+          className="mx-auto mb-6 h-28 w-28 object-contain drop-shadow-[0_0_28px_rgba(6,182,212,0.4)]"
+        />
+        <span className="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs text-muted">
+          <span className="h-1.5 w-1.5 rounded-full bg-brand-2 shadow-[0_0_8px_var(--brand-2)]" />
           Pour les boutiques en ligne · Modèle BYOK
         </span>
         <h1 className="mx-auto mt-5 max-w-3xl text-balance text-4xl font-bold tracking-tight sm:text-5xl">
           Des fiches produits qui vendent,{" "}
-          <span className="bg-gradient-to-r from-brand to-brand-2 bg-clip-text text-transparent">
-            générées en masse
+          <span className="bg-gradient-to-r from-brand via-brand-amber to-brand-2 bg-clip-text text-transparent">
+            forgées par l&apos;IA
           </span>
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-pretty text-muted">
@@ -40,13 +51,13 @@ export default function Home() {
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link
             href="/generate"
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand-2 px-5 py-3 font-medium text-white transition hover:opacity-90"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand-amber px-5 py-3 font-medium text-white shadow-[0_8px_30px_-8px_rgba(249,115,22,0.7)] transition hover:opacity-90"
           >
             <Boxes size={18} /> Commencer à générer
           </Link>
           <Link
             href="/settings"
-            className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-5 py-3 font-medium transition hover:bg-surface-2"
+            className="glass inline-flex items-center gap-2 rounded-xl px-5 py-3 font-medium transition hover:border-[color:var(--border-glow)]"
           >
             Configurer ma clé <ArrowRight size={16} />
           </Link>
@@ -57,9 +68,9 @@ export default function Home() {
         {features.map(({ icon: Icon, title, desc }) => (
           <div
             key={title}
-            className="rounded-2xl border border-border bg-surface p-6"
+            className="glass group rounded-2xl p-6 transition hover:border-[color:var(--border-glow)]"
           >
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2 text-brand-2">
+            <div className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-surface-2 text-brand-2 transition group-hover:shadow-[0_0_16px_-4px_var(--brand-2)]">
               <Icon size={20} />
             </div>
             <h3 className="mt-4 font-semibold">{title}</h3>

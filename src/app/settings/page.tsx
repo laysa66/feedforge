@@ -42,7 +42,7 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <div className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4 text-sm">
+      <div className="glass flex items-start gap-3 rounded-xl p-4 text-sm">
         <ShieldCheck className="mt-0.5 shrink-0 text-success" size={18} />
         <p className="text-muted">
           Votre clé est stockée <strong className="text-foreground">uniquement dans votre navigateur</strong>{" "}
@@ -65,7 +65,7 @@ export default function SettingsPage() {
               value={apiKey}
               onChange={(e) => setKey(e.target.value)}
               placeholder="sk-ant-..."
-              className="w-full rounded-lg border border-border bg-surface-2 py-2.5 pl-9 pr-10 font-mono text-sm outline-none focus:border-brand"
+              className="w-full rounded-lg border border-border bg-surface-2 py-2.5 pl-9 pr-10 font-mono text-sm outline-none focus:border-brand-2"
             />
             <button
               type="button"
@@ -96,7 +96,7 @@ export default function SettingsPage() {
         <select
           value={model}
           onChange={(e) => setModel(e.target.value)}
-          className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-sm outline-none focus:border-brand"
+          className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-sm outline-none focus:border-brand-2"
         >
           {MODELS.map((m) => (
             <option key={m.id} value={m.id}>
@@ -118,13 +118,13 @@ export default function SettingsPage() {
           onChange={(e) => setBrand(e.target.value)}
           rows={3}
           placeholder="Ex : chaleureux et premium, tutoiement, vocabulaire éco-responsable…"
-          className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-sm outline-none focus:border-brand"
+          className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-sm outline-none focus:border-brand-2"
         />
       </div>
 
       <button
         onClick={save}
-        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand-2 px-5 py-2.5 font-medium text-white transition hover:opacity-90"
+        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand-amber px-5 py-2.5 font-medium text-white shadow-[0_8px_30px_-8px_rgba(249,115,22,0.7)] transition hover:opacity-90"
       >
         {saved ? <Check size={18} /> : null}
         {saved ? "Enregistré" : "Enregistrer"}

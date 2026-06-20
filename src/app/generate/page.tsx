@@ -37,6 +37,7 @@ export default function GeneratePage() {
   const [rows, setRows] = useState<Row[]>([newRow()]);
   const [hasKey, setHasKey] = useState(true);
   const [running, setRunning] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -197,7 +198,38 @@ export default function GeneratePage() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-border">
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!dragging) setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          setDragging(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          const f = e.dataTransfer.files?.[0];
+          if (f && /\.csv$/i.test(f.name)) importCsv(f);
+        }}
+        onClick={() => fileRef.current?.click()}
+        className={`relative cursor-pointer rounded-2xl p-5 text-center text-sm transition ${
+          dragging
+            ? "marching-ants bg-brand-2/5 text-foreground"
+            : "glass text-muted hover:border-[color:var(--border-glow)]"
+        }`}
+      >
+        <Upload
+          size={18}
+          className={`mx-auto mb-1.5 ${dragging ? "text-brand-2" : ""}`}
+        />
+        {dragging
+          ? "Déposez le fichier pour l'importer"
+          : "Glissez-déposez un CSV ici, ou cliquez pour parcourir"}
+      </div>
+
+      <div className="glass overflow-hidden rounded-2xl">
         <table className="w-full border-collapse text-sm">
           <thead className="bg-surface-2 text-left text-muted">
             <tr>
@@ -209,13 +241,18 @@ export default function GeneratePage() {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.id} className="border-t border-border align-top">
+              <tr
+                key={row.id}
+                className={`border-t border-border align-top ${
+                  row.status === "loading" ? "forge-loading" : ""
+                }`}
+              >
                 <td className="px-4 py-3">
                   <input
                     value={row.name}
                     onChange={(e) => updateRow(row.id, { name: e.target.value })}
                     placeholder="Tasse en céramique"
-                    className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand"
+                    className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
                   />
                 </td>
                 <td className="px-4 py-3">
@@ -225,13 +262,13 @@ export default function GeneratePage() {
                       updateRow(row.id, { attributes: e.target.value })
                     }
                     placeholder="couleur: bleu, 350ml"
-                    className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand"
+                    className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
                   />
                 </td>
                 <td className="px-4 py-3">
                   {row.status === "loading" ? (
-                    <span className="flex items-center gap-2 text-muted">
-                      <Loader2 className="animate-spin" size={14} /> Génération…
+                    <span className="flex items-center gap-2 text-brand-2">
+                      <Loader2 className="animate-spin" size={14} /> Forge en cours…
                     </span>
                   ) : row.status === "error" ? (
                     <span className="text-danger">{row.error}</span>
@@ -243,7 +280,7 @@ export default function GeneratePage() {
                       }
                       rows={row.description ? 4 : 1}
                       placeholder="—"
-                      className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand"
+                      className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
                     />
                   )}
                 </td>
@@ -273,7 +310,7 @@ export default function GeneratePage() {
         <button
           onClick={generateAll}
           disabled={running}
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand-2 px-5 py-2.5 font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand-amber px-5 py-2.5 font-medium text-white shadow-[0_8px_30px_-8px_rgba(249,115,22,0.7)] transition hover:opacity-90 disabled:opacity-60"
         >
           {running ? (
             <Loader2 className="animate-spin" size={18} />
