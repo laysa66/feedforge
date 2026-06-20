@@ -72,9 +72,12 @@ export default function DashboardPage() {
     {
       icon: Coins,
       label: "Coût estimé total",
-      node: (
-        <CountUp value={totals.costUsd} decimals={2} suffix=" $" />
-      ),
+      node:
+        totals.costUsd < 0.01 ? (
+          <CountUp value={totals.costUsd * 100} decimals={2} suffix=" ¢" />
+        ) : (
+          <CountUp value={totals.costUsd} decimals={2} suffix=" $" />
+        ),
     },
   ];
 
@@ -127,11 +130,14 @@ export default function DashboardPage() {
             </h2>
             <div className="flex h-40 items-end gap-2">
               {byDay.map(([day, val]) => (
-                <div key={day} className="flex flex-1 flex-col items-center gap-2">
-                  <div className="flex w-full flex-1 items-end">
+                <div
+                  key={day}
+                  className="flex h-full flex-1 flex-col items-center justify-end gap-2"
+                >
+                  <div className="flex w-full flex-1 items-end justify-center">
                     <div
-                      className="w-full rounded-t bg-gradient-to-t from-brand to-brand-2"
-                      style={{ height: `${(val / maxDay) * 100}%` }}
+                      className="w-full max-w-16 rounded-t bg-gradient-to-t from-brand to-brand-2"
+                      style={{ height: `${Math.max(2, (val / maxDay) * 100)}%` }}
                       title={fmtUsd(val)}
                     />
                   </div>
