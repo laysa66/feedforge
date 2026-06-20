@@ -12,7 +12,13 @@ import {
   TriangleAlert,
   Loader2,
 } from "lucide-react";
-import { getApiKey, getModelId, getBrandVoice, addUsage } from "@/lib/storage";
+import {
+  getApiKey,
+  getModelId,
+  getBrandVoice,
+  getProvider,
+  addUsage,
+} from "@/lib/storage";
 import { estimateCost } from "@/lib/models";
 
 type Row = {
@@ -78,6 +84,7 @@ export default function GeneratePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          provider: getProvider(),
           apiKey: getApiKey(),
           model: getModelId(),
           brandVoice: getBrandVoice(),
@@ -91,6 +98,7 @@ export default function GeneratePage() {
       const model = getModelId();
       addUsage({
         at: Date.now(),
+        provider: getProvider(),
         model,
         count: 1,
         inputTokens,

@@ -1,20 +1,26 @@
 "use client";
 
 // Stockage local (navigateur du client). Rien n'est envoyé chez nous :
-// la clé API et l'historique de consommation restent sur la machine du client.
-// C'est le cœur du modèle "Bring Your Own Key" — zéro coût et zéro responsabilité pour nous.
+// les clés API et l'historique de consommation restent sur la machine du client.
+// C'est le cœur du modèle "Bring Your Own Key".
 
-import { DEFAULT_MODEL } from "./models";
+import {
+  DEFAULT_PROVIDER,
+  defaultModelFor,
+  type ProviderId,
+} from "./models";
 
-const KEY_API = "feedforge.apiKey";
+const KEY_PROVIDER = "feedforge.provider";
+const KEY_KEYS = "feedforge.keys"; // map { provider: clé }
 const KEY_MODEL = "feedforge.model";
 const KEY_USAGE = "feedforge.usage";
 const KEY_BRAND = "feedforge.brandVoice";
 
 export type UsageRecord = {
-  at: number; // timestamp
+  at: number;
+  provider: ProviderId;
   model: string;
-  count: number; // nb de fiches générées dans le lot
+  count: number;
   inputTokens: number;
   outputTokens: number;
   costUsd: number;
@@ -38,15 +44,51 @@ function safeSet(key: string, value: string) {
   }
 }
 
-export const getApiKey = () => safeGet(KEY_API) ?? "";
-export const setApiKey = (v: string) => safeSet(KEY_API, v.trim());
+// --- Fournisseur sélectionné ---
+export function getProvider(): ProviderId {
+  return (safeGet(KEY_PROVIDER) as ProviderId) || DEFAULT_PROVIDER;
+}
+export function setProvider(p: ProviderId) {
+  safeSet(KEY_PROVIDER, p);
+}
 
-export const getModelId = () => safeGet(KEY_MODEL) ?? DEFAULT_MODEL;
-export const setModelId = (v: string) => safeSet(KEY_MODEL, v);
+// --- Clés API (une par fournisseur) ---
+function readKeys(): Record<string, string> {
+  const raw = safeGet(KEY_KEYS);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
 
+export function getKeyFor(provider: ProviderId): string {
+  return readKeys()[provider] ?? "";
+}
+export function setKeyFor(provider: ProviderId, value: string) {
+  const keys = readKeys();
+  keys[provider] = value.trim();
+  safeSet(KEY_KEYS, JSON.stringify(keys));
+}
+
+// Clé du fournisseur actuellement sélectionné (utilisée à la génération).
+export const getApiKey = () => getKeyFor(getProvider());
+
+// --- Modèle sélectionné ---
+export function getModelId(): string {
+  return safeGet(KEY_MODEL) || defaultModelFor(getProvider());
+}
+export function setModelId(v: string) {
+  safeSet(KEY_MODEL, v);
+}
+
+// --- Ton de marque ---
 export const getBrandVoice = () => safeGet(KEY_BRAND) ?? "";
 export const setBrandVoice = (v: string) => safeSet(KEY_BRAND, v);
 
+// --- Historique de consommation ---
 export function getUsage(): UsageRecord[] {
   const raw = safeGet(KEY_USAGE);
   if (!raw) return [];
@@ -61,7 +103,6 @@ export function getUsage(): UsageRecord[] {
 export function addUsage(record: UsageRecord) {
   const all = getUsage();
   all.push(record);
-  // On garde les 500 derniers lots pour ne pas saturer le stockage.
   safeSet(KEY_USAGE, JSON.stringify(all.slice(-500)));
 }
 

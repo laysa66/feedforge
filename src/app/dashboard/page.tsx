@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Boxes, Coins, Cpu, Trash2 } from "lucide-react";
 import { getUsage, clearUsage, type UsageRecord } from "@/lib/storage";
-import { getModel } from "@/lib/models";
+import { findModel } from "@/lib/models";
 import CountUp from "@/components/CountUp";
 
 function fmtUsd(n: number) {
@@ -146,22 +146,31 @@ export default function DashboardPage() {
               <thead className="bg-surface-2 text-left text-muted">
                 <tr>
                   <th className="px-4 py-3 font-medium">Date</th>
+                  <th className="px-4 py-3 font-medium">Fournisseur</th>
                   <th className="px-4 py-3 font-medium">Modèle</th>
                   <th className="px-4 py-3 font-medium">Tokens (in / out)</th>
                   <th className="px-4 py-3 font-medium">Coût</th>
                 </tr>
               </thead>
               <tbody>
-                {[...usage].reverse().slice(0, 50).map((u, i) => (
-                  <tr key={i} className="border-t border-border">
-                    <td className="px-4 py-2.5">{fmtDate(u.at)}</td>
-                    <td className="px-4 py-2.5">{getModel(u.model).label.split(" — ")[0]}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs">
-                      {u.inputTokens} / {u.outputTokens}
-                    </td>
-                    <td className="px-4 py-2.5">{fmtUsd(u.costUsd)}</td>
-                  </tr>
-                ))}
+                {[...usage].reverse().slice(0, 50).map((u, i) => {
+                  const found = findModel(u.model);
+                  return (
+                    <tr key={i} className="border-t border-border">
+                      <td className="px-4 py-2.5">{fmtDate(u.at)}</td>
+                      <td className="px-4 py-2.5">
+                        {found?.provider.label.split(" (")[0] ?? u.provider ?? "—"}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {found?.model.label.split(" — ")[0] ?? u.model}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs">
+                        {u.inputTokens} / {u.outputTokens}
+                      </td>
+                      <td className="px-4 py-2.5">{fmtUsd(u.costUsd)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

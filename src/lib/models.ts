@@ -1,41 +1,91 @@
-// Modèles Claude disponibles + tarifs (USD par million de tokens).
-// Source : tarification API Anthropic. Sert au dashboard d'estimation de coût.
+// Fournisseurs d'IA supportés (BYOK) + leurs modèles et tarifs indicatifs
+// (USD par million de tokens). Sert au dashboard d'estimation de coût.
+// Les tarifs évoluent côté fournisseurs : ce sont des estimations.
+
+export type ProviderId = "anthropic" | "openai" | "gemini" | "openrouter";
+
 export type ModelInfo = {
-  id: string;
+  id: string; // identifiant envoyé à l'API
   label: string;
-  inputPerMTok: number; // $ / 1M tokens en entrée
-  outputPerMTok: number; // $ / 1M tokens en sortie
-  note: string;
+  inputPerMTok: number;
+  outputPerMTok: number;
 };
 
-export const MODELS: ModelInfo[] = [
+export type ProviderInfo = {
+  id: ProviderId;
+  label: string;
+  keysUrl: string;
+  keyHint: string; // format attendu de la clé
+  models: ModelInfo[];
+};
+
+export const PROVIDERS: ProviderInfo[] = [
   {
-    id: "claude-haiku-4-5",
-    label: "Claude Haiku 4.5 — le moins cher",
-    inputPerMTok: 1,
-    outputPerMTok: 5,
-    note: "Idéal pour les fiches produits : rapide et économique.",
+    id: "anthropic",
+    label: "Anthropic (Claude)",
+    keysUrl: "https://console.anthropic.com/settings/keys",
+    keyHint: "sk-ant-...",
+    models: [
+      { id: "claude-haiku-4-5", label: "Claude Haiku 4.5 — le moins cher", inputPerMTok: 1, outputPerMTok: 5 },
+      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 — équilibré", inputPerMTok: 3, outputPerMTok: 15 },
+      { id: "claude-opus-4-8", label: "Claude Opus 4.8 — le plus puissant", inputPerMTok: 5, outputPerMTok: 25 },
+    ],
   },
   {
-    id: "claude-sonnet-4-6",
-    label: "Claude Sonnet 4.6 — équilibré",
-    inputPerMTok: 3,
-    outputPerMTok: 15,
-    note: "Plus de finesse rédactionnelle pour un coût modéré.",
+    id: "openai",
+    label: "OpenAI",
+    keysUrl: "https://platform.openai.com/api-keys",
+    keyHint: "sk-...",
+    models: [
+      { id: "gpt-4o-mini", label: "GPT-4o mini — le moins cher", inputPerMTok: 0.15, outputPerMTok: 0.6 },
+      { id: "gpt-4.1-mini", label: "GPT-4.1 mini — équilibré", inputPerMTok: 0.4, outputPerMTok: 1.6 },
+      { id: "gpt-4o", label: "GPT-4o — premium", inputPerMTok: 2.5, outputPerMTok: 10 },
+    ],
   },
   {
-    id: "claude-opus-4-8",
-    label: "Claude Opus 4.8 — le plus puissant",
-    inputPerMTok: 5,
-    outputPerMTok: 25,
-    note: "Qualité maximale, pour les marques premium.",
+    id: "gemini",
+    label: "Google Gemini",
+    keysUrl: "https://aistudio.google.com/app/apikey",
+    keyHint: "AIza...",
+    models: [
+      { id: "gemini-1.5-flash", label: "Gemini 1.5 Flash — le moins cher", inputPerMTok: 0.075, outputPerMTok: 0.3 },
+      { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash — équilibré", inputPerMTok: 0.1, outputPerMTok: 0.4 },
+      { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro — premium", inputPerMTok: 1.25, outputPerMTok: 5 },
+    ],
+  },
+  {
+    id: "openrouter",
+    label: "OpenRouter",
+    keysUrl: "https://openrouter.ai/keys",
+    keyHint: "sk-or-...",
+    models: [
+      { id: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash", inputPerMTok: 0.1, outputPerMTok: 0.4 },
+      { id: "openai/gpt-4o-mini", label: "GPT-4o mini", inputPerMTok: 0.15, outputPerMTok: 0.6 },
+      { id: "anthropic/claude-3.5-haiku", label: "Claude 3.5 Haiku", inputPerMTok: 0.8, outputPerMTok: 4 },
+      { id: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B", inputPerMTok: 0.12, outputPerMTok: 0.3 },
+    ],
   },
 ];
 
-export const DEFAULT_MODEL = MODELS[0].id;
+export const DEFAULT_PROVIDER: ProviderId = "anthropic";
 
-export function getModel(id: string): ModelInfo {
-  return MODELS.find((m) => m.id === id) ?? MODELS[0];
+export function getProviderInfo(id: ProviderId): ProviderInfo {
+  return PROVIDERS.find((p) => p.id === id) ?? PROVIDERS[0];
+}
+
+export function defaultModelFor(provider: ProviderId): string {
+  return getProviderInfo(provider).models[0].id;
+}
+
+// Retrouve un modèle (et son fournisseur) par identifiant, tous fournisseurs confondus.
+export function findModel(
+  modelId: string,
+): { provider: ProviderInfo; model: ModelInfo } | null {
+  for (const provider of PROVIDERS) {
+    const model = provider.models.find((m) => m.id === modelId);
+    if (model) return { provider, model };
+  }
+  return null;
 }
 
 // Coût estimé en USD pour un nombre de tokens donné.
@@ -44,9 +94,10 @@ export function estimateCost(
   inputTokens: number,
   outputTokens: number,
 ): number {
-  const m = getModel(modelId);
+  const found = findModel(modelId);
+  if (!found) return 0;
   return (
-    (inputTokens / 1_000_000) * m.inputPerMTok +
-    (outputTokens / 1_000_000) * m.outputPerMTok
+    (inputTokens / 1_000_000) * found.model.inputPerMTok +
+    (outputTokens / 1_000_000) * found.model.outputPerMTok
   );
 }

@@ -11,8 +11,8 @@ const features = [
   },
   {
     icon: KeyRound,
-    title: "Votre propre clé (BYOK)",
-    desc: "Vous utilisez votre clé API. Aucune donnée, aucune clé ne transite par nos serveurs.",
+    title: "Votre clé, votre IA (BYOK)",
+    desc: "Claude, OpenAI, Gemini ou OpenRouter — branchez votre propre clé. Rien n'est conservé chez nous.",
   },
   {
     icon: LineChart,
