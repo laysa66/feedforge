@@ -21,6 +21,35 @@ import {
 } from "@/lib/storage";
 import { estimateCost } from "@/lib/models";
 
+// Nombre de générations lancées en parallèle (compromis vitesse / rate limit).
+const CONCURRENCY = 4;
+// Estimation grossière de la sortie par fiche (pour le coût prévisionnel).
+const EST_OUTPUT_TOKENS = 320;
+const SYSTEM_OVERHEAD_CHARS = 320;
+
+function fmtCost(usd: number) {
+  return usd < 0.01 ? `${(usd * 100).toFixed(2)} ¢` : `$${usd.toFixed(2)}`;
+}
+
+// Exécute `worker` sur tous les items avec une limite de parallélisme.
+async function runPool<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+) {
+  let cursor = 0;
+  const lanes = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (cursor < items.length) {
+        const item = items[cursor++];
+        await worker(item);
+      }
+    },
+  );
+  await Promise.all(lanes);
+}
+
 type Row = {
   id: number;
   name: string;
@@ -44,10 +73,14 @@ export default function GeneratePage() {
   const [hasKey, setHasKey] = useState(true);
   const [running, setRunning] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [model, setModel] = useState("");
+  const [brandLen, setBrandLen] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setHasKey(!!getApiKey());
+    setModel(getModelId());
+    setBrandLen(getBrandVoice().length);
   }, []);
 
   function updateRow(id: number, patch: Partial<Row>) {
@@ -92,7 +125,7 @@ export default function GeneratePage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erreur");
+      if (!res.ok) throw new Error(data.error || "Error");
       updateRow(row.id, { description: data.description, status: "done" });
       const { inputTokens, outputTokens } = data.usage;
       const model = getModelId();
@@ -108,7 +141,7 @@ export default function GeneratePage() {
     } catch (e) {
       updateRow(row.id, {
         status: "error",
-        error: e instanceof Error ? e.message : "Erreur",
+        error: e instanceof Error ? e.message : "Error",
       });
     }
   }
@@ -118,14 +151,11 @@ export default function GeneratePage() {
       setHasKey(false);
       return;
     }
+    const pending = rows.filter((r) => r.name.trim() && r.status !== "done");
+    if (!pending.length) return;
     setRunning(true);
-    // On séquence pour éviter de saturer le rate limit du client.
-    for (const row of rows) {
-      if (row.name.trim() && row.status !== "done") {
-        // eslint-disable-next-line no-await-in-loop
-        await generateOne(row);
-      }
-    }
+    // Génération en parallèle, plafonnée pour ménager le rate limit du client.
+    await runPool(pending, CONCURRENCY, generateOne);
     setRunning(false);
   }
 
@@ -149,6 +179,23 @@ export default function GeneratePage() {
   }
 
   const doneCount = rows.filter((r) => r.status === "done").length;
+  const eligible = rows.filter((r) => r.name.trim());
+  const total = eligible.length;
+  const estTokens = eligible.reduce(
+    (acc, r) => {
+      acc.input += Math.ceil(
+        (SYSTEM_OVERHEAD_CHARS + r.name.length + r.attributes.length + brandLen) /
+          4,
+      );
+      acc.output += EST_OUTPUT_TOKENS;
+      return acc;
+    },
+    { input: 0, output: 0 },
+  );
+  const estCost = model
+    ? estimateCost(model, estTokens.input, estTokens.output)
+    : 0;
+  const progress = total ? Math.round((doneCount / total) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -311,18 +358,33 @@ export default function GeneratePage() {
         </table>
       </div>
 
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-muted">
-          {doneCount} / {rows.filter((r) => r.name.trim()).length} generated
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-[12rem] flex-1 space-y-2">
+          <div className="flex items-center justify-between text-sm text-muted">
+            <span>
+              {doneCount} / {total} generated
+            </span>
+            <span>
+              Est. cost{" "}
+              <span className="font-medium text-foreground">
+                ~{fmtCost(estCost)}
+              </span>{" "}
+              for {total} {total === 1 ? "product" : "products"}
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-surface-2">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-brand to-brand-2 transition-[width] duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
         <button
           onClick={generateAll}
           disabled={running}
           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand-amber px-5 py-2.5 font-medium text-white shadow-[0_8px_30px_-8px_rgba(249,115,22,0.7)] transition hover:opacity-90 disabled:opacity-60"
         >
-          {running && (
-            <Loader2 className="animate-spin" size={18} />
-          )}
+          {running && <Loader2 className="animate-spin" size={18} />}
           {running ? "Generating…" : "Generate all"}
         </button>
       </div>
