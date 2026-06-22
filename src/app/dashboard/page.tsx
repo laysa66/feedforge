@@ -7,11 +7,11 @@ import { findModel } from "@/lib/models";
 import CountUp from "@/components/CountUp";
 
 function fmtUsd(n: number) {
-  return n < 0.01 ? `${(n * 100).toFixed(2)} ¢` : `${n.toFixed(2)} $`;
+  return n < 0.01 ? `${(n * 100).toFixed(2)} ¢` : `$${n.toFixed(2)}`;
 }
 
 function fmtDate(ts: number) {
-  return new Date(ts).toLocaleString("fr-FR", {
+  return new Date(ts).toLocaleString("en-US", {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
@@ -42,7 +42,7 @@ export default function DashboardPage() {
   const byDay = useMemo(() => {
     const map = new Map<string, number>();
     for (const u of usage) {
-      const d = new Date(u.at).toLocaleDateString("fr-FR", {
+      const d = new Date(u.at).toLocaleDateString("en-US", {
         day: "2-digit",
         month: "2-digit",
       });
@@ -61,17 +61,17 @@ export default function DashboardPage() {
   const cards = [
     {
       icon: Boxes,
-      label: "Fiches générées",
+      label: "Descriptions generated",
       node: <CountUp value={totals.count} />,
     },
     {
       icon: Cpu,
-      label: "Tokens consommés",
+      label: "Tokens used",
       node: <CountUp value={totals.inputTokens + totals.outputTokens} />,
     },
     {
       icon: Coins,
-      label: "Coût estimé total",
+      label: "Estimated total cost",
       node:
         totals.costUsd < 0.01 ? (
           <CountUp value={totals.costUsd * 100} decimals={2} suffix=" ¢" />
@@ -85,9 +85,9 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Consommation</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Usage</h1>
           <p className="mt-1 text-muted">
-            Suivi de vos générations et du coût IA estimé (basé sur votre clé).
+            Track your generations and estimated AI cost (based on your key).
           </p>
         </div>
         {usage.length > 0 && (
@@ -95,7 +95,7 @@ export default function DashboardPage() {
             onClick={reset}
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-muted transition hover:text-danger"
           >
-            <Trash2 size={16} /> Réinitialiser
+            <Trash2 size={16} /> Reset
           </button>
         )}
       </div>
@@ -119,14 +119,14 @@ export default function DashboardPage() {
 
       {usage.length === 0 ? (
         <div className="glass rounded-2xl border-dashed p-10 text-center text-muted">
-          Aucune génération pour l&apos;instant. Lancez votre première fiche dans
-          l&apos;onglet « Générer ».
+          No generations yet. Create your first description in the “Generate”
+          tab.
         </div>
       ) : (
         <>
           <div className="glass rounded-2xl p-5">
             <h2 className="mb-4 text-sm font-medium text-muted">
-              Coût estimé par jour
+              Estimated cost per day
             </h2>
             <div className="flex h-40 items-end gap-2">
               {byDay.map(([day, val]) => (
@@ -152,10 +152,10 @@ export default function DashboardPage() {
               <thead className="bg-surface-2 text-left text-muted">
                 <tr>
                   <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Fournisseur</th>
-                  <th className="px-4 py-3 font-medium">Modèle</th>
+                  <th className="px-4 py-3 font-medium">Provider</th>
+                  <th className="px-4 py-3 font-medium">Model</th>
                   <th className="px-4 py-3 font-medium">Tokens (in / out)</th>
-                  <th className="px-4 py-3 font-medium">Coût</th>
+                  <th className="px-4 py-3 font-medium">Cost</th>
                 </tr>
               </thead>
               <tbody>

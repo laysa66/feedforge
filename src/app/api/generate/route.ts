@@ -27,18 +27,18 @@ const OPENAI_COMPATIBLE_BASE: Partial<Record<ProviderId, string>> = {
 
 function buildPrompts(product: ProductInput, brandVoice?: string) {
   const system = [
-    "Tu es un rédacteur e-commerce expert en fiches produits optimisées SEO.",
-    "Rédige une description de produit en français : 2 paragraphes courts, vendeuse, naturelle, sans superlatifs creux.",
-    "Intègre subtilement des mots-clés pertinents. Pas de titre, pas de listes à puces, pas de préambule — uniquement la description.",
-    brandVoice?.trim() ? `Respecte ce ton de marque : ${brandVoice.trim()}` : "",
+    "You are an expert e-commerce copywriter specialized in SEO-optimized product descriptions.",
+    "Write a product description in English: 2 short paragraphs, persuasive, natural, no empty superlatives.",
+    "Subtly weave in relevant keywords. No title, no bullet lists, no preamble — only the description.",
+    brandVoice?.trim() ? `Follow this brand voice: ${brandVoice.trim()}` : "",
   ]
     .filter(Boolean)
     .join("\n");
 
   const user = [
-    `Produit : ${product.name.trim()}`,
-    product.attributes?.trim() ? `Attributs : ${product.attributes.trim()}` : "",
-    "Rédige la description.",
+    `Product: ${product.name.trim()}`,
+    product.attributes?.trim() ? `Attributes: ${product.attributes.trim()}` : "",
+    "Write the description.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -51,20 +51,20 @@ export async function POST(req: Request) {
   try {
     body = (await req.json()) as Body;
   } catch {
-    return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
   const { provider, apiKey, model, brandVoice, product } = body;
 
   if (!apiKey?.trim()) {
     return NextResponse.json(
-      { error: "Clé API manquante. Renseignez-la dans Réglages." },
+      { error: "Missing API key. Add it in Settings." },
       { status: 401 },
     );
   }
   if (!product?.name?.trim()) {
     return NextResponse.json(
-      { error: "Le nom du produit est requis." },
+      { error: "Product name is required." },
       { status: 400 },
     );
   }
@@ -99,7 +99,7 @@ export async function POST(req: Request) {
     const baseURL = OPENAI_COMPATIBLE_BASE[provider];
     if (!baseURL) {
       return NextResponse.json(
-        { error: "Fournisseur non supporté." },
+        { error: "Unsupported provider." },
         { status: 400 },
       );
     }
@@ -122,7 +122,7 @@ export async function POST(req: Request) {
     });
   } catch (err: unknown) {
     let status = 500;
-    let msg = "Erreur lors de la génération.";
+    let msg = "Generation failed.";
     if (err instanceof Anthropic.APIError || err instanceof OpenAI.APIError) {
       status = err.status ?? 500;
       msg = err.message;

@@ -7,9 +7,9 @@ import { LayoutDashboard, Settings, Boxes } from "lucide-react";
 import logo from "@/app/icon.png";
 
 const links = [
-  { href: "/generate", label: "Générer", icon: Boxes },
-  { href: "/dashboard", label: "Consommation", icon: LayoutDashboard },
-  { href: "/settings", label: "Réglages", icon: Settings },
+  { href: "/generate", label: "Generate", icon: Boxes },
+  { href: "/dashboard", label: "Usage", icon: LayoutDashboard },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export default function Nav() {

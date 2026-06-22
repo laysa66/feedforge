@@ -134,8 +134,8 @@ export default function GeneratePage() {
       rows
         .filter((r) => r.description)
         .map((r) => ({
-          produit: r.name,
-          attributs: r.attributes,
+          product: r.name,
+          attributes: r.attributes,
           description: r.description,
         })),
     );
@@ -154,9 +154,9 @@ export default function GeneratePage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Générer des fiches</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Generate descriptions</h1>
           <p className="mt-1 text-muted">
-            Importez un CSV ou ajoutez vos produits à la main.
+            Import a CSV or add your products manually.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -175,20 +175,20 @@ export default function GeneratePage() {
             onClick={() => fileRef.current?.click()}
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm transition hover:bg-surface-2"
           >
-            <Upload size={16} /> Importer CSV
+            <Upload size={16} /> Import CSV
           </button>
           <button
             onClick={() => setRows((rs) => [...rs, newRow()])}
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm transition hover:bg-surface-2"
           >
-            <Plus size={16} /> Ligne
+            <Plus size={16} /> Row
           </button>
           <button
             onClick={exportCsv}
             disabled={doneCount === 0}
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm transition hover:bg-surface-2 disabled:opacity-40"
           >
-            <Download size={16} /> Exporter
+            <Download size={16} /> Export
           </button>
         </div>
       </div>
@@ -197,11 +197,11 @@ export default function GeneratePage() {
         <div className="flex items-center gap-3 rounded-xl border border-danger/40 bg-danger/10 p-4 text-sm">
           <TriangleAlert className="shrink-0 text-danger" size={18} />
           <span>
-            Aucune clé API configurée.{" "}
+            No API key configured.{" "}
             <Link href="/settings" className="font-medium text-brand-2 underline">
-              Renseignez-la dans Réglages
+              Add it in Settings
             </Link>{" "}
-            pour générer.
+            to generate.
           </span>
         </div>
       )}
@@ -233,16 +233,16 @@ export default function GeneratePage() {
           className={`mx-auto mb-1.5 ${dragging ? "text-brand-2" : ""}`}
         />
         {dragging
-          ? "Déposez le fichier pour l'importer"
-          : "Glissez-déposez un CSV ici, ou cliquez pour parcourir"}
+          ? "Drop the file to import it"
+          : "Drag & drop a CSV here, or click to browse"}
       </div>
 
       <div className="glass overflow-hidden rounded-2xl">
         <table className="w-full border-collapse text-sm">
           <thead className="bg-surface-2 text-left text-muted">
             <tr>
-              <th className="w-1/4 px-4 py-3 font-medium">Produit</th>
-              <th className="w-1/4 px-4 py-3 font-medium">Attributs</th>
+              <th className="w-1/4 px-4 py-3 font-medium">Product</th>
+              <th className="w-1/4 px-4 py-3 font-medium">Attributes</th>
               <th className="px-4 py-3 font-medium">Description</th>
               <th className="w-10 px-2 py-3" />
             </tr>
@@ -259,7 +259,7 @@ export default function GeneratePage() {
                   <input
                     value={row.name}
                     onChange={(e) => updateRow(row.id, { name: e.target.value })}
-                    placeholder="Tasse en céramique"
+                    placeholder="Ceramic mug"
                     className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
                   />
                 </td>
@@ -269,14 +269,14 @@ export default function GeneratePage() {
                     onChange={(e) =>
                       updateRow(row.id, { attributes: e.target.value })
                     }
-                    placeholder="couleur: bleu, 350ml"
+                    placeholder="color: blue, 350ml"
                     className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
                   />
                 </td>
                 <td className="px-4 py-3">
                   {row.status === "loading" ? (
                     <span className="flex items-center gap-2 text-brand-2">
-                      <Loader2 className="animate-spin" size={14} /> Forge en cours…
+                      <Loader2 className="animate-spin" size={14} /> Forging…
                     </span>
                   ) : row.status === "error" ? (
                     <span className="text-danger">{row.error}</span>
@@ -300,7 +300,7 @@ export default function GeneratePage() {
                       )
                     }
                     className="rounded p-1 text-muted hover:text-danger"
-                    aria-label="Supprimer"
+                    aria-label="Delete"
                   >
                     <Trash2 size={16} />
                   </button>
@@ -313,7 +313,7 @@ export default function GeneratePage() {
 
       <div className="flex items-center justify-between">
         <span className="text-sm text-muted">
-          {doneCount} / {rows.filter((r) => r.name.trim()).length} générées
+          {doneCount} / {rows.filter((r) => r.name.trim()).length} generated
         </span>
         <button
           onClick={generateAll}
@@ -325,7 +325,7 @@ export default function GeneratePage() {
           ) : (
             <Sparkles size={18} />
           )}
-          {running ? "Génération en cours…" : "Tout générer"}
+          {running ? "Generating…" : "Generate all"}
         </button>
       </div>
     </div>

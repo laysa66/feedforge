@@ -46,7 +46,7 @@ export default function CountUp({
     };
   }, [value, duration]);
 
-  const formatted = display.toLocaleString("fr-FR", {
+  const formatted = display.toLocaleString("en-US", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });

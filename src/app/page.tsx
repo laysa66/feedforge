@@ -6,18 +6,18 @@ import logo from "@/app/icon.png";
 const features = [
   {
     icon: FileSpreadsheet,
-    title: "Import CSV en masse",
-    desc: "Importez votre catalogue et générez des centaines de descriptions d'un coup.",
+    title: "Bulk CSV import",
+    desc: "Import your catalog and generate hundreds of descriptions in one click.",
   },
   {
     icon: KeyRound,
-    title: "Votre clé, votre IA (BYOK)",
-    desc: "Claude, OpenAI, Gemini ou OpenRouter — branchez votre propre clé. Rien n'est conservé chez nous.",
+    title: "Your key, your AI (BYOK)",
+    desc: "Claude, OpenAI, Gemini or OpenRouter — plug in your own key. Nothing is stored on our side.",
   },
   {
     icon: LineChart,
-    title: "Consommation en temps réel",
-    desc: "Suivez vos tokens et votre coût estimé à chaque génération.",
+    title: "Real-time usage",
+    desc: "Track your tokens and estimated cost on every generation.",
   },
 ];
 
@@ -35,31 +35,31 @@ export default function Home() {
         />
         <span className="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs text-muted">
           <span className="h-1.5 w-1.5 rounded-full bg-brand-2 shadow-[0_0_8px_var(--brand-2)]" />
-          Pour les boutiques en ligne · Modèle BYOK
+          Built for online stores · BYOK model
         </span>
         <h1 className="mx-auto mt-5 max-w-3xl text-balance text-4xl font-bold tracking-tight sm:text-5xl">
-          Des fiches produits qui vendent,{" "}
+          Product descriptions that sell,{" "}
           <span className="bg-gradient-to-r from-brand via-brand-amber to-brand-2 bg-clip-text text-transparent">
-            forgées par l&apos;IA
+            forged by AI
           </span>
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-pretty text-muted">
-          FeedForge rédige des descriptions produits optimisées SEO pour votre
-          catalogue e-commerce. Importez un CSV, générez, exportez. Vous payez
-          uniquement votre consommation IA via votre propre clé.
+          FeedForge writes SEO-optimized product descriptions for your
+          e-commerce catalog. Import a CSV, generate, export. You only pay for
+          your own AI usage, through your own key.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link
             href="/generate"
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand-amber px-5 py-3 font-medium text-white shadow-[0_8px_30px_-8px_rgba(249,115,22,0.7)] transition hover:opacity-90"
           >
-            <Boxes size={18} /> Commencer à générer
+            <Boxes size={18} /> Start generating
           </Link>
           <Link
             href="/settings"
             className="glass inline-flex items-center gap-2 rounded-xl px-5 py-3 font-medium transition hover:border-[color:var(--border-glow)]"
           >
-            Configurer ma clé <ArrowRight size={16} />
+            Set up my key <ArrowRight size={16} />
           </Link>
         </div>
       </section>

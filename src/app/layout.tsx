@@ -14,9 +14,9 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "FeedForge — Fiches produits IA pour e-commerce",
+  title: "FeedForge — AI product descriptions for e-commerce",
   description:
-    "Générez des descriptions produits optimisées SEO en masse, avec votre propre clé API. Suivez votre consommation en temps réel.",
+    "Generate SEO-optimized product descriptions in bulk with your own API key. Track your usage and cost in real time.",
 };
 
 export default function RootLayout({
@@ -26,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="fr"
+      lang="en"
       className={`${inter.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
@@ -35,7 +35,7 @@ export default function RootLayout({
           {children}
         </main>
         <footer className="border-t border-border px-5 py-6 text-center text-sm text-muted">
-          FeedForge · Vos clés et vos données restent dans votre navigateur.
+          FeedForge · Your keys and data never leave your browser.
         </footer>
       </body>
     </html>
