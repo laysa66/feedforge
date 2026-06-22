@@ -7,7 +7,6 @@ import {
   Upload,
   Plus,
   Trash2,
-  Sparkles,
   Download,
   TriangleAlert,
   Loader2,
@@ -17,6 +16,7 @@ import {
   getModelId,
   getBrandVoice,
   getProvider,
+  getLanguages,
   addUsage,
 } from "@/lib/storage";
 import { estimateCost } from "@/lib/models";
@@ -26,6 +26,23 @@ const CONCURRENCY = 4;
 // Estimation grossière de la sortie par fiche (pour le coût prévisionnel).
 const EST_OUTPUT_TOKENS = 320;
 const SYSTEM_OVERHEAD_CHARS = 320;
+
+type CellStatus = "idle" | "loading" | "done" | "error";
+type Cell = { text: string; status: CellStatus; error?: string };
+type Row = {
+  id: number;
+  name: string;
+  attributes: string;
+  outputs: Record<string, Cell>; // une cellule par langue
+};
+
+let nextId = 1;
+const newRow = (name = "", attributes = ""): Row => ({
+  id: nextId++,
+  name,
+  attributes,
+  outputs: {},
+});
 
 function fmtCost(usd: number) {
   return usd < 0.01 ? `${(usd * 100).toFixed(2)} ¢` : `$${usd.toFixed(2)}`;
@@ -50,23 +67,7 @@ async function runPool<T>(
   await Promise.all(lanes);
 }
 
-type Row = {
-  id: number;
-  name: string;
-  attributes: string;
-  description: string;
-  status: "idle" | "loading" | "done" | "error";
-  error?: string;
-};
-
-let nextId = 1;
-const newRow = (name = "", attributes = ""): Row => ({
-  id: nextId++,
-  name,
-  attributes,
-  description: "",
-  status: "idle",
-});
+type Unit = { rowId: number; name: string; attributes: string; lang: string };
 
 export default function GeneratePage() {
   const [rows, setRows] = useState<Row[]>([newRow()]);
@@ -75,16 +76,28 @@ export default function GeneratePage() {
   const [dragging, setDragging] = useState(false);
   const [model, setModel] = useState("");
   const [brandLen, setBrandLen] = useState(0);
+  const [languages, setLanguages] = useState<string[]>(["English"]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setHasKey(!!getApiKey());
     setModel(getModelId());
     setBrandLen(getBrandVoice().length);
+    setLanguages(getLanguages());
   }, []);
 
   function updateRow(id: number, patch: Partial<Row>) {
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
+
+  function updateCell(rowId: number, lang: string, patch: Partial<Cell>) {
+    setRows((rs) =>
+      rs.map((r) => {
+        if (r.id !== rowId) return r;
+        const prev = r.outputs[lang] ?? { text: "", status: "idle" as CellStatus };
+        return { ...r, outputs: { ...r.outputs, [lang]: { ...prev, ...patch } } };
+      }),
+    );
   }
 
   function importCsv(file: File) {
@@ -96,7 +109,8 @@ export default function GeneratePage() {
           .map((line) => {
             const keys = Object.keys(line);
             const nameKey =
-              keys.find((k) => /nom|name|titre|title|produit/i.test(k)) ?? keys[0];
+              keys.find((k) => /nom|name|titre|title|produit|product/i.test(k)) ??
+              keys[0];
             const name = (line[nameKey] ?? "").trim();
             const attributes = keys
               .filter((k) => k !== nameKey)
@@ -110,8 +124,8 @@ export default function GeneratePage() {
     });
   }
 
-  async function generateOne(row: Row) {
-    updateRow(row.id, { status: "loading", error: undefined });
+  async function generateUnit(unit: Unit) {
+    updateCell(unit.rowId, unit.lang, { status: "loading", error: undefined });
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -121,25 +135,29 @@ export default function GeneratePage() {
           apiKey: getApiKey(),
           model: getModelId(),
           brandVoice: getBrandVoice(),
-          product: { name: row.name, attributes: row.attributes },
+          language: unit.lang,
+          product: { name: unit.name, attributes: unit.attributes },
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error");
-      updateRow(row.id, { description: data.description, status: "done" });
+      updateCell(unit.rowId, unit.lang, {
+        text: data.description,
+        status: "done",
+      });
       const { inputTokens, outputTokens } = data.usage;
-      const model = getModelId();
+      const m = getModelId();
       addUsage({
         at: Date.now(),
         provider: getProvider(),
-        model,
+        model: m,
         count: 1,
         inputTokens,
         outputTokens,
-        costUsd: estimateCost(model, inputTokens, outputTokens),
+        costUsd: estimateCost(m, inputTokens, outputTokens),
       });
     } catch (e) {
-      updateRow(row.id, {
+      updateCell(unit.rowId, unit.lang, {
         status: "error",
         error: e instanceof Error ? e.message : "Error",
       });
@@ -151,24 +169,41 @@ export default function GeneratePage() {
       setHasKey(false);
       return;
     }
-    const pending = rows.filter((r) => r.name.trim() && r.status !== "done");
-    if (!pending.length) return;
+    const units: Unit[] = [];
+    for (const row of rows) {
+      if (!row.name.trim()) continue;
+      for (const lang of languages) {
+        if (row.outputs[lang]?.status === "done") continue;
+        units.push({
+          rowId: row.id,
+          name: row.name,
+          attributes: row.attributes,
+          lang,
+        });
+      }
+    }
+    if (!units.length) return;
     setRunning(true);
-    // Génération en parallèle, plafonnée pour ménager le rate limit du client.
-    await runPool(pending, CONCURRENCY, generateOne);
+    await runPool(units, CONCURRENCY, generateUnit);
     setRunning(false);
   }
 
   function exportCsv() {
-    const csv = Papa.unparse(
-      rows
-        .filter((r) => r.description)
-        .map((r) => ({
+    const rich = languages.length > 1;
+    const data = rows
+      .filter((r) => languages.some((l) => r.outputs[l]?.text))
+      .map((r) => {
+        const base: Record<string, string> = {
           product: r.name,
           attributes: r.attributes,
-          description: r.description,
-        })),
-    );
+        };
+        for (const lang of languages) {
+          const key = rich ? `description_${lang.toLowerCase()}` : "description";
+          base[key] = r.outputs[lang]?.text ?? "";
+        }
+        return base;
+      });
+    const csv = Papa.unparse(data);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -178,16 +213,21 @@ export default function GeneratePage() {
     URL.revokeObjectURL(url);
   }
 
-  const doneCount = rows.filter((r) => r.status === "done").length;
   const eligible = rows.filter((r) => r.name.trim());
-  const total = eligible.length;
+  const total = eligible.length * languages.length;
+  const doneCount = eligible.reduce(
+    (acc, r) =>
+      acc + languages.filter((l) => r.outputs[l]?.status === "done").length,
+    0,
+  );
   const estTokens = eligible.reduce(
     (acc, r) => {
-      acc.input += Math.ceil(
+      const perUnit = Math.ceil(
         (SYSTEM_OVERHEAD_CHARS + r.name.length + r.attributes.length + brandLen) /
           4,
       );
-      acc.output += EST_OUTPUT_TOKENS;
+      acc.input += perUnit * languages.length;
+      acc.output += EST_OUTPUT_TOKENS * languages.length;
       return acc;
     },
     { input: 0, output: 0 },
@@ -201,7 +241,9 @@ export default function GeneratePage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Generate descriptions</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Generate descriptions
+          </h1>
           <p className="mt-1 text-muted">
             Import a CSV or add your products manually.
           </p>
@@ -295,65 +337,86 @@ export default function GeneratePage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr
-                key={row.id}
-                className={`border-t border-border align-top ${
-                  row.status === "loading" ? "forge-loading" : ""
-                }`}
-              >
-                <td className="px-4 py-3">
-                  <input
-                    value={row.name}
-                    onChange={(e) => updateRow(row.id, { name: e.target.value })}
-                    placeholder="Ceramic mug"
-                    className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
-                  />
-                </td>
-                <td className="px-4 py-3">
-                  <input
-                    value={row.attributes}
-                    onChange={(e) =>
-                      updateRow(row.id, { attributes: e.target.value })
-                    }
-                    placeholder="color: blue, 350ml"
-                    className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
-                  />
-                </td>
-                <td className="px-4 py-3">
-                  {row.status === "loading" ? (
-                    <span className="flex items-center gap-2 text-brand-2">
-                      <Loader2 className="animate-spin" size={14} /> Forging…
-                    </span>
-                  ) : row.status === "error" ? (
-                    <span className="text-danger">{row.error}</span>
-                  ) : (
-                    <textarea
-                      value={row.description}
-                      onChange={(e) =>
-                        updateRow(row.id, { description: e.target.value })
-                      }
-                      rows={row.description ? 4 : 1}
-                      placeholder="—"
+            {rows.map((row) => {
+              const rowLoading = languages.some(
+                (l) => row.outputs[l]?.status === "loading",
+              );
+              return (
+                <tr
+                  key={row.id}
+                  className={`border-t border-border align-top ${
+                    rowLoading ? "forge-loading" : ""
+                  }`}
+                >
+                  <td className="px-4 py-3">
+                    <input
+                      value={row.name}
+                      onChange={(e) => updateRow(row.id, { name: e.target.value })}
+                      placeholder="Ceramic mug"
                       className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
                     />
-                  )}
-                </td>
-                <td className="px-2 py-3 text-center">
-                  <button
-                    onClick={() =>
-                      setRows((rs) =>
-                        rs.length > 1 ? rs.filter((r) => r.id !== row.id) : rs,
-                      )
-                    }
-                    className="rounded p-1 text-muted hover:text-danger"
-                    aria-label="Delete"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      value={row.attributes}
+                      onChange={(e) =>
+                        updateRow(row.id, { attributes: e.target.value })
+                      }
+                      placeholder="color: blue, 350ml"
+                      className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
+                    />
+                  </td>
+                  <td className="space-y-3 px-4 py-3">
+                    {languages.map((lang) => {
+                      const cell = row.outputs[lang];
+                      const status = cell?.status ?? "idle";
+                      return (
+                        <div key={lang} className="space-y-1">
+                          {languages.length > 1 && (
+                            <span className="inline-block rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-brand-2">
+                              {lang}
+                            </span>
+                          )}
+                          {status === "loading" ? (
+                            <span className="flex items-center gap-2 text-brand-2">
+                              <Loader2 className="animate-spin" size={14} /> Forging…
+                            </span>
+                          ) : status === "error" ? (
+                            <span className="text-danger">{cell?.error}</span>
+                          ) : (
+                            <textarea
+                              value={cell?.text ?? ""}
+                              onChange={(e) =>
+                                updateCell(row.id, lang, {
+                                  text: e.target.value,
+                                  status: "done",
+                                })
+                              }
+                              rows={cell?.text ? 4 : 1}
+                              placeholder="—"
+                              className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </td>
+                  <td className="px-2 py-3 text-center">
+                    <button
+                      onClick={() =>
+                        setRows((rs) =>
+                          rs.length > 1 ? rs.filter((r) => r.id !== row.id) : rs,
+                        )
+                      }
+                      className="rounded p-1 text-muted hover:text-danger"
+                      aria-label="Delete"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -368,8 +431,7 @@ export default function GeneratePage() {
               Est. cost{" "}
               <span className="font-medium text-foreground">
                 ~{fmtCost(estCost)}
-              </span>{" "}
-              for {total} {total === 1 ? "product" : "products"}
+              </span>
             </span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-surface-2">

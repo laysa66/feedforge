@@ -17,13 +17,17 @@ import {
   setModelId,
   getBrandVoice,
   setBrandVoice,
+  getLanguages,
+  setLanguages,
 } from "@/lib/storage";
+import { LANGUAGES } from "@/lib/languages";
 
 export default function SettingsPage() {
   const [provider, setProv] = useState<ProviderId>(PROVIDERS[0].id);
   const [apiKey, setKey] = useState("");
   const [model, setModel] = useState(PROVIDERS[0].models[0].id);
   const [brand, setBrand] = useState("");
+  const [langs, setLangs] = useState<string[]>(["English"]);
   const [show, setShow] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -34,7 +38,14 @@ export default function SettingsPage() {
     setKey(getKeyFor(p));
     setModel(getModelId());
     setBrand(getBrandVoice());
+    setLangs(getLanguages());
   }, []);
+
+  function toggleLang(lang: string) {
+    setLangs((cur) =>
+      cur.includes(lang) ? cur.filter((l) => l !== lang) : [...cur, lang],
+    );
+  }
 
   // Quand on change de fournisseur : on charge sa clé + on réinitialise le modèle.
   function changeProvider(p: ProviderId) {
@@ -48,6 +59,7 @@ export default function SettingsPage() {
     setKeyFor(provider, apiKey);
     setModelId(model);
     setBrandVoice(brand);
+    setLanguages(langs);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -144,6 +156,32 @@ export default function SettingsPage() {
         </select>
         <p className="text-xs text-muted">
           Indicative pricing — actual billing depends on the provider.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Output languages</label>
+        <div className="flex flex-wrap gap-2">
+          {LANGUAGES.map((lang) => {
+            const active = langs.includes(lang);
+            return (
+              <button
+                key={lang}
+                type="button"
+                onClick={() => toggleLang(lang)}
+                className={`rounded-lg border px-3 py-1.5 text-sm transition ${
+                  active
+                    ? "border-brand-2 bg-brand-2/10 text-foreground"
+                    : "border-border bg-surface text-muted hover:text-foreground"
+                }`}
+              >
+                {lang}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted">
+          Each product is generated once per selected language.
         </p>
       </div>
 

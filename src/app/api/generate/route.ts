@@ -15,6 +15,7 @@ type Body = {
   apiKey: string;
   model: string;
   brandVoice?: string;
+  language?: string;
   product: ProductInput;
 };
 
@@ -25,10 +26,15 @@ const OPENAI_COMPATIBLE_BASE: Partial<Record<ProviderId, string>> = {
   gemini: "https://generativelanguage.googleapis.com/v1beta/openai/",
 };
 
-function buildPrompts(product: ProductInput, brandVoice?: string) {
+function buildPrompts(
+  product: ProductInput,
+  brandVoice?: string,
+  language?: string,
+) {
+  const lang = language?.trim() || "English";
   const system = [
     "You are an expert e-commerce copywriter specialized in SEO-optimized product descriptions.",
-    "Write a product description in English: 2 short paragraphs, persuasive, natural, no empty superlatives.",
+    `Write the product description in ${lang}: 2 short paragraphs, persuasive, natural, no empty superlatives.`,
     "Subtly weave in relevant keywords. No title, no bullet lists, no preamble — only the description.",
     brandVoice?.trim() ? `Follow this brand voice: ${brandVoice.trim()}` : "",
   ]
@@ -54,7 +60,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { provider, apiKey, model, brandVoice, product } = body;
+  const { provider, apiKey, model, brandVoice, language, product } = body;
 
   if (!apiKey?.trim()) {
     return NextResponse.json(
@@ -69,7 +75,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { system, user } = buildPrompts(product, brandVoice);
+  const { system, user } = buildPrompts(product, brandVoice, language);
 
   try {
     // --- Anthropic (Claude) : SDK dédié ---

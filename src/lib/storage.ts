@@ -9,12 +9,14 @@ import {
   defaultModelFor,
   type ProviderId,
 } from "./models";
+import { DEFAULT_LANGUAGES } from "./languages";
 
 const KEY_PROVIDER = "feedforge.provider";
 const KEY_KEYS = "feedforge.keys"; // map { provider: clé }
 const KEY_MODEL = "feedforge.model";
 const KEY_USAGE = "feedforge.usage";
 const KEY_BRAND = "feedforge.brandVoice";
+const KEY_LANGS = "feedforge.languages";
 
 export type UsageRecord = {
   at: number;
@@ -87,6 +89,21 @@ export function setModelId(v: string) {
 // --- Ton de marque ---
 export const getBrandVoice = () => safeGet(KEY_BRAND) ?? "";
 export const setBrandVoice = (v: string) => safeSet(KEY_BRAND, v);
+
+// --- Langues de sortie ---
+export function getLanguages(): string[] {
+  const raw = safeGet(KEY_LANGS);
+  if (!raw) return DEFAULT_LANGUAGES;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length ? parsed : DEFAULT_LANGUAGES;
+  } catch {
+    return DEFAULT_LANGUAGES;
+  }
+}
+export function setLanguages(langs: string[]) {
+  safeSet(KEY_LANGS, JSON.stringify(langs.length ? langs : DEFAULT_LANGUAGES));
+}
 
 // --- Historique de consommation ---
 export function getUsage(): UsageRecord[] {
