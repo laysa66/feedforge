@@ -7,7 +7,9 @@ import { findModel } from "@/lib/models";
 import CountUp from "@/components/CountUp";
 
 function fmtUsd(n: number) {
-  return n < 0.01 ? `${(n * 100).toFixed(2)} ¢` : `$${n.toFixed(2)}`;
+  if (n <= 0) return "$0.00";
+  // Sous le centime : plus de décimales pour rester lisible (ex. $0.0029).
+  return n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
 }
 
 function fmtDate(ts: number) {
@@ -72,12 +74,13 @@ export default function DashboardPage() {
     {
       icon: Coins,
       label: "Estimated total cost",
-      node:
-        totals.costUsd < 0.01 ? (
-          <CountUp value={totals.costUsd * 100} decimals={2} suffix=" $" />
-        ) : (
-          <CountUp value={totals.costUsd} decimals={2} suffix=" $" />
-        ),
+      node: (
+        <CountUp
+          value={totals.costUsd}
+          decimals={totals.costUsd < 0.01 ? 4 : 2}
+          prefix="$"
+        />
+      ),
     },
   ];
 

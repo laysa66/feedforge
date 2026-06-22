@@ -49,7 +49,7 @@ const newRow = (name = "", attributes = ""): Row => ({
 });
 
 function fmtCost(usd: number) {
-  return usd < 0.01 ? `${(usd * 100).toFixed(2)} ¢` : `$${usd.toFixed(2)}`;
+  return usd < 0.01 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`;
 }
 
 // Lit un fichier image en base64 (sans le préfixe data:).
