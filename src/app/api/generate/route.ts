@@ -10,6 +10,7 @@ import type { ProviderId } from "@/lib/models";
 export const runtime = "nodejs";
 
 type ProductInput = { name: string; attributes?: string };
+type ImageInput = { mediaType: string; data: string }; // data = base64 sans préfixe
 type Body = {
   provider: ProviderId;
   apiKey: string;
@@ -17,6 +18,7 @@ type Body = {
   brandVoice?: string;
   language?: string;
   product: ProductInput;
+  image?: ImageInput;
 };
 
 // URL de base pour les fournisseurs compatibles OpenAI.
@@ -30,12 +32,16 @@ function buildPrompts(
   product: ProductInput,
   brandVoice?: string,
   language?: string,
+  hasImage?: boolean,
 ) {
   const lang = language?.trim() || "English";
   const system = [
     "You are an expert e-commerce copywriter specialized in SEO-optimized product descriptions.",
     `Write the product description in ${lang}: 2 short paragraphs, persuasive, natural, no empty superlatives.`,
     "Subtly weave in relevant keywords. No title, no bullet lists, no preamble — only the description.",
+    hasImage
+      ? "A product image is attached — use what you see in it (materials, colors, style, details) to enrich the description."
+      : "",
     brandVoice?.trim() ? `Follow this brand voice: ${brandVoice.trim()}` : "",
   ]
     .filter(Boolean)
@@ -60,7 +66,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { provider, apiKey, model, brandVoice, language, product } = body;
+  const { provider, apiKey, model, brandVoice, language, product, image } = body;
 
   if (!apiKey?.trim()) {
     return NextResponse.json(
@@ -75,17 +81,30 @@ export async function POST(req: Request) {
     );
   }
 
-  const { system, user } = buildPrompts(product, brandVoice, language);
+  const { system, user } = buildPrompts(product, brandVoice, language, !!image);
 
   try {
     // --- Anthropic (Claude) : SDK dédié ---
     if (provider === "anthropic") {
       const client = new Anthropic({ apiKey });
+      const content: Anthropic.ContentBlockParam[] = image
+        ? [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: image.mediaType as "image/png",
+                data: image.data,
+              },
+            },
+            { type: "text", text: user },
+          ]
+        : [{ type: "text", text: user }];
       const message = await client.messages.create({
         model,
         max_tokens: 1024,
         system,
-        messages: [{ role: "user", content: user }],
+        messages: [{ role: "user", content }],
       });
       const description = message.content
         .filter((b) => b.type === "text")
@@ -110,12 +129,21 @@ export async function POST(req: Request) {
       );
     }
     const client = new OpenAI({ apiKey, baseURL });
+    const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
+      { type: "text", text: user },
+    ];
+    if (image) {
+      userContent.push({
+        type: "image_url",
+        image_url: { url: `data:${image.mediaType};base64,${image.data}` },
+      });
+    }
     const completion = await client.chat.completions.create({
       model,
       max_tokens: 1024,
       messages: [
         { role: "system", content: system },
-        { role: "user", content: user },
+        { role: "user", content: userContent },
       ],
     });
     const description = completion.choices[0]?.message?.content?.trim() ?? "";

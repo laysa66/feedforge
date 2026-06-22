@@ -10,6 +10,8 @@ import {
   Download,
   TriangleAlert,
   Loader2,
+  ImagePlus,
+  X,
 } from "lucide-react";
 import {
   getApiKey,
@@ -29,10 +31,12 @@ const SYSTEM_OVERHEAD_CHARS = 320;
 
 type CellStatus = "idle" | "loading" | "done" | "error";
 type Cell = { text: string; status: CellStatus; error?: string };
+type ProductImage = { mediaType: string; data: string }; // data = base64 sans préfixe
 type Row = {
   id: number;
   name: string;
   attributes: string;
+  image?: ProductImage;
   outputs: Record<string, Cell>; // une cellule par langue
 };
 
@@ -46,6 +50,21 @@ const newRow = (name = "", attributes = ""): Row => ({
 
 function fmtCost(usd: number) {
   return usd < 0.01 ? `${(usd * 100).toFixed(2)} ¢` : `$${usd.toFixed(2)}`;
+}
+
+// Lit un fichier image en base64 (sans le préfixe data:).
+function fileToImage(file: File): Promise<ProductImage> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string; // data:<mime>;base64,<data>
+      const comma = result.indexOf(",");
+      const mediaType = result.slice(5, result.indexOf(";"));
+      resolve({ mediaType, data: result.slice(comma + 1) });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 // Exécute `worker` sur tous les items avec une limite de parallélisme.
@@ -67,7 +86,13 @@ async function runPool<T>(
   await Promise.all(lanes);
 }
 
-type Unit = { rowId: number; name: string; attributes: string; lang: string };
+type Unit = {
+  rowId: number;
+  name: string;
+  attributes: string;
+  lang: string;
+  image?: ProductImage;
+};
 
 export default function GeneratePage() {
   const [rows, setRows] = useState<Row[]>([newRow()]);
@@ -137,6 +162,7 @@ export default function GeneratePage() {
           brandVoice: getBrandVoice(),
           language: unit.lang,
           product: { name: unit.name, attributes: unit.attributes },
+          image: unit.image,
         }),
       });
       const data = await res.json();
@@ -179,6 +205,7 @@ export default function GeneratePage() {
           name: row.name,
           attributes: row.attributes,
           lang,
+          image: row.image,
         });
       }
     }
@@ -355,6 +382,39 @@ export default function GeneratePage() {
                       placeholder="Ceramic mug"
                       className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
                     />
+                    <div className="mt-1.5 flex items-center gap-2">
+                      {row.image ? (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={`data:${row.image.mediaType};base64,${row.image.data}`}
+                            alt="product"
+                            className="h-9 w-9 rounded border border-border object-cover"
+                          />
+                          <button
+                            onClick={() => updateRow(row.id, { image: undefined })}
+                            className="rounded p-1 text-muted hover:text-danger"
+                            aria-label="Remove image"
+                          >
+                            <X size={14} />
+                          </button>
+                        </>
+                      ) : (
+                        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs text-muted transition hover:text-foreground">
+                          <ImagePlus size={14} /> Image
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0];
+                              if (f) updateRow(row.id, { image: await fileToImage(f) });
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <input
