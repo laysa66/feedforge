@@ -320,10 +320,8 @@ export default function GeneratePage() {
           disabled={running}
           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand-amber px-5 py-2.5 font-medium text-white shadow-[0_8px_30px_-8px_rgba(249,115,22,0.7)] transition hover:opacity-90 disabled:opacity-60"
         >
-          {running ? (
+          {running && (
             <Loader2 className="animate-spin" size={18} />
-          ) : (
-            <Sparkles size={18} />
           )}
           {running ? "Generating…" : "Generate all"}
         </button>

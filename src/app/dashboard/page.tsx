@@ -74,7 +74,7 @@ export default function DashboardPage() {
       label: "Estimated total cost",
       node:
         totals.costUsd < 0.01 ? (
-          <CountUp value={totals.costUsd * 100} decimals={2} suffix=" ¢" />
+          <CountUp value={totals.costUsd * 100} decimals={2} suffix=" $" />
         ) : (
           <CountUp value={totals.costUsd} decimals={2} suffix=" $" />
         ),
