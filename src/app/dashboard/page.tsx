@@ -21,8 +21,42 @@ function fmtDate(ts: number) {
   });
 }
 
+type Period = "day" | "week" | "month";
+const PERIODS: { id: Period; label: string }[] = [
+  { id: "day", label: "Day" },
+  { id: "week", label: "Week" },
+  { id: "month", label: "Month" },
+];
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+// Lundi de la semaine d'une date donnée.
+function startOfWeek(d: Date) {
+  const x = new Date(d);
+  const offset = (x.getDay() + 6) % 7; // lundi = 0
+  x.setDate(x.getDate() - offset);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+// Clé triable + libellé d'affichage pour une date selon la période.
+function bucketOf(d: Date, period: Period): { key: string; label: string } {
+  if (period === "month") {
+    return {
+      key: `${d.getFullYear()}-${pad(d.getMonth() + 1)}`,
+      label: d.toLocaleDateString("en-US", { month: "short" }),
+    };
+  }
+  const base = period === "week" ? startOfWeek(d) : d;
+  return {
+    key: `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}`,
+    label: `${pad(base.getMonth() + 1)}/${pad(base.getDate())}`,
+  };
+}
+
 export default function DashboardPage() {
   const [usage, setUsage] = useState<UsageRecord[]>([]);
+  const [period, setPeriod] = useState<Period>("day");
 
   useEffect(() => {
     setUsage(getUsage());
@@ -40,20 +74,23 @@ export default function DashboardPage() {
     );
   }, [usage]);
 
-  // Conso par jour pour le mini-graphe.
-  const byDay = useMemo(() => {
-    const map = new Map<string, number>();
+  // Conso agrégée par période (jour / semaine / mois) pour le mini-graphe.
+  const series = useMemo(() => {
+    const buckets = new Map<string, { label: string; total: number }>();
     for (const u of usage) {
-      const d = new Date(u.at).toLocaleDateString("en-US", {
-        day: "2-digit",
-        month: "2-digit",
-      });
-      map.set(d, (map.get(d) ?? 0) + u.costUsd);
+      const { key, label } = bucketOf(new Date(u.at), period);
+      const cur = buckets.get(key) ?? { label, total: 0 };
+      cur.total += u.costUsd;
+      buckets.set(key, cur);
     }
-    return Array.from(map.entries()).slice(-14);
-  }, [usage]);
+    const sorted = [...buckets.entries()].sort((a, b) =>
+      a[0] < b[0] ? -1 : 1,
+    );
+    const limit = period === "day" ? 14 : 12;
+    return sorted.slice(-limit).map(([, v]) => v);
+  }, [usage, period]);
 
-  const maxDay = Math.max(0.0001, ...byDay.map(([, v]) => v));
+  const maxVal = Math.max(0.0001, ...series.map((s) => s.total));
 
   function reset() {
     clearUsage();
@@ -128,23 +165,40 @@ export default function DashboardPage() {
       ) : (
         <>
           <div className="glass rounded-2xl p-5">
-            <h2 className="mb-4 text-sm font-medium text-muted">
-              Estimated cost per day
-            </h2>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-medium text-muted">
+                Estimated cost per {period}
+              </h2>
+              <div className="flex gap-1 rounded-lg border border-border bg-surface p-0.5">
+                {PERIODS.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setPeriod(p.id)}
+                    className={`rounded-md px-2.5 py-1 text-xs transition ${
+                      period === p.id
+                        ? "bg-surface-2 text-foreground"
+                        : "text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="flex h-40 items-end gap-2">
-              {byDay.map(([day, val]) => (
+              {series.map((s, i) => (
                 <div
-                  key={day}
+                  key={i}
                   className="flex h-full flex-1 flex-col items-center justify-end gap-2"
                 >
                   <div className="flex w-full flex-1 items-end justify-center">
                     <div
                       className="w-full max-w-16 rounded-t bg-gradient-to-t from-brand to-brand-2"
-                      style={{ height: `${Math.max(2, (val / maxDay) * 100)}%` }}
-                      title={fmtUsd(val)}
+                      style={{ height: `${Math.max(2, (s.total / maxVal) * 100)}%` }}
+                      title={fmtUsd(s.total)}
                     />
                   </div>
-                  <span className="text-[10px] text-muted">{day}</span>
+                  <span className="text-[10px] text-muted">{s.label}</span>
                 </div>
               ))}
             </div>
