@@ -19,6 +19,16 @@ Import a CSV, forge hundreds of descriptions in one click, export. You pay only 
 
 </div>
 
+
+
+<div align="center">
+
+<video src="public/the%20video.mp4" width="720" controls muted></video>
+
+[Watch the demo video](public/the%20video.mp4)
+
+</div>
+
 ---
 
 ##  Why FeedForge?
