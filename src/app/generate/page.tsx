@@ -12,6 +12,8 @@ import {
   Loader2,
   ImagePlus,
   X,
+  RefreshCw,
+  Eraser,
 } from "lucide-react";
 import {
   getApiKey,
@@ -20,36 +22,96 @@ import {
   getProvider,
   getLanguages,
   addUsage,
+  getSession,
+  setSession,
+  clearSession,
 } from "@/lib/storage";
 import { estimateCost } from "@/lib/models";
 
 // Nombre de générations lancées en parallèle (compromis vitesse / rate limit).
 const CONCURRENCY = 4;
 // Estimation grossière de la sortie par fiche (pour le coût prévisionnel).
-const EST_OUTPUT_TOKENS = 320;
+// Le pack SEO complet (titre + desc + bullets + meta + keywords) est plus long
+// qu'un simple paragraphe.
+const EST_OUTPUT_TOKENS = 520;
 const SYSTEM_OVERHEAD_CHARS = 320;
 
 type CellStatus = "idle" | "loading" | "done" | "error";
-type Cell = { text: string; status: CellStatus; error?: string };
+// Pack SEO structuré généré par fiche produit.
+type SeoFields = {
+  title: string;
+  description: string;
+  bullets: string[];
+  metaDescription: string;
+  keywords: string[];
+};
+type Cell = { fields: SeoFields; status: CellStatus; error?: string };
 type ProductImage = { mediaType: string; data: string }; // data = base64 sans préfixe
 type Row = {
   id: number;
   name: string;
   attributes: string;
+  keyword: string; // mot-clé SEO cible (optionnel)
   image?: ProductImage;
   outputs: Record<string, Cell>; // une cellule par langue
 };
+
+const emptyFields = (): SeoFields => ({
+  title: "",
+  description: "",
+  bullets: [],
+  metaDescription: "",
+  keywords: [],
+});
+
+// Une cellule contient-elle du contenu généré (ou édité) ?
+const hasContent = (c?: Cell) =>
+  !!c &&
+  (c.fields.title ||
+    c.fields.description ||
+    c.fields.bullets.length > 0 ||
+    c.fields.metaDescription ||
+    c.fields.keywords.length > 0);
 
 let nextId = 1;
 const newRow = (name = "", attributes = ""): Row => ({
   id: nextId++,
   name,
   attributes,
+  keyword: "",
   outputs: {},
 });
 
 function fmtCost(usd: number) {
   return usd < 0.01 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`;
+}
+
+// Champ éditable du pack SEO, avec un petit label.
+function FieldBlock({
+  label,
+  value,
+  rows = 1,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  rows?: number;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted">
+        {label}
+      </span>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        placeholder="—"
+        className="w-full resize-y rounded-md border border-border bg-surface px-2 py-1.5 text-sm outline-none focus:border-brand-2"
+      />
+    </label>
+  );
 }
 
 // Lit un fichier image en base64 (sans le préfixe data:).
@@ -90,6 +152,7 @@ type Unit = {
   rowId: number;
   name: string;
   attributes: string;
+  keyword: string;
   lang: string;
   image?: ProductImage;
 };
@@ -102,6 +165,7 @@ export default function GeneratePage() {
   const [model, setModel] = useState("");
   const [brandLen, setBrandLen] = useState(0);
   const [languages, setLanguages] = useState<string[]>(["English"]);
+  const [hydrated, setHydrated] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -109,7 +173,32 @@ export default function GeneratePage() {
     setModel(getModelId());
     setBrandLen(getBrandVoice().length);
     setLanguages(getLanguages());
+    // Restaure le brouillon précédent (produits + fiches déjà générées).
+    const saved = getSession<Row[]>();
+    if (saved && saved.length) {
+      nextId = saved.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+      // Une génération interrompue par un reload : on repasse "loading" en "idle".
+      setRows(
+        saved.map((r) => ({
+          ...r,
+          outputs: Object.fromEntries(
+            Object.entries(r.outputs).map(([lang, cell]) => [
+              lang,
+              cell.status === "loading" ? { ...cell, status: "idle" } : cell,
+            ]),
+          ),
+        })),
+      );
+    }
+    setHydrated(true);
   }, []);
+
+  // Sauvegarde le brouillon à chaque changement (hors images : base64 trop lourd
+  // pour le quota localStorage). 100 % local, cohérent avec le modèle BYOK.
+  useEffect(() => {
+    if (!hydrated) return;
+    setSession(rows.map((r) => ({ ...r, image: undefined })));
+  }, [rows, hydrated]);
 
   function updateRow(id: number, patch: Partial<Row>) {
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -119,8 +208,35 @@ export default function GeneratePage() {
     setRows((rs) =>
       rs.map((r) => {
         if (r.id !== rowId) return r;
-        const prev = r.outputs[lang] ?? { text: "", status: "idle" as CellStatus };
+        const prev = r.outputs[lang] ?? {
+          fields: emptyFields(),
+          status: "idle" as CellStatus,
+        };
         return { ...r, outputs: { ...r.outputs, [lang]: { ...prev, ...patch } } };
+      }),
+    );
+  }
+
+  // Édition inline d'un champ du pack SEO.
+  function updateCellFields(
+    rowId: number,
+    lang: string,
+    patch: Partial<SeoFields>,
+  ) {
+    setRows((rs) =>
+      rs.map((r) => {
+        if (r.id !== rowId) return r;
+        const prev = r.outputs[lang] ?? {
+          fields: emptyFields(),
+          status: "done" as CellStatus,
+        };
+        return {
+          ...r,
+          outputs: {
+            ...r.outputs,
+            [lang]: { ...prev, status: "done", fields: { ...prev.fields, ...patch } },
+          },
+        };
       }),
     );
   }
@@ -136,12 +252,17 @@ export default function GeneratePage() {
             const nameKey =
               keys.find((k) => /nom|name|titre|title|produit|product/i.test(k)) ??
               keys[0];
+            const keywordKey = keys.find((k) =>
+              /keyword|mot.?cl[eé]|seo/i.test(k),
+            );
             const name = (line[nameKey] ?? "").trim();
             const attributes = keys
-              .filter((k) => k !== nameKey)
+              .filter((k) => k !== nameKey && k !== keywordKey)
               .map((k) => `${k}: ${line[k]}`)
               .join(", ");
-            return name ? newRow(name, attributes) : null;
+            const row = name ? newRow(name, attributes) : null;
+            if (row && keywordKey) row.keyword = (line[keywordKey] ?? "").trim();
+            return row;
           })
           .filter((r): r is Row => r !== null);
         if (imported.length) setRows(imported);
@@ -161,6 +282,7 @@ export default function GeneratePage() {
           model: getModelId(),
           brandVoice: getBrandVoice(),
           language: unit.lang,
+          keyword: unit.keyword,
           product: { name: unit.name, attributes: unit.attributes },
           image: unit.image,
         }),
@@ -168,7 +290,7 @@ export default function GeneratePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error");
       updateCell(unit.rowId, unit.lang, {
-        text: data.description,
+        fields: data.content as SeoFields,
         status: "done",
       });
       const { inputTokens, outputTokens } = data.usage;
@@ -190,7 +312,8 @@ export default function GeneratePage() {
     }
   }
 
-  async function generateAll() {
+  // Lance la génération sur les cellules retenues par `include`.
+  async function runUnits(include: (cell?: Cell) => boolean) {
     if (!getApiKey()) {
       setHasKey(false);
       return;
@@ -199,11 +322,12 @@ export default function GeneratePage() {
     for (const row of rows) {
       if (!row.name.trim()) continue;
       for (const lang of languages) {
-        if (row.outputs[lang]?.status === "done") continue;
+        if (!include(row.outputs[lang])) continue;
         units.push({
           rowId: row.id,
           name: row.name,
           attributes: row.attributes,
+          keyword: row.keyword,
           lang,
           image: row.image,
         });
@@ -215,18 +339,36 @@ export default function GeneratePage() {
     setRunning(false);
   }
 
+  // Génère tout ce qui n'est pas encore fait ; le retry ne relance que les échecs.
+  const generateAll = () => runUnits((cell) => cell?.status !== "done");
+  const retryFailed = () => runUnits((cell) => cell?.status === "error");
+
+  // Réinitialise le brouillon (produits + fiches + session persistée).
+  function clearAll() {
+    clearSession();
+    nextId = 1;
+    setRows([newRow()]);
+  }
+
   function exportCsv() {
-    const rich = languages.length > 1;
+    const multi = languages.length > 1;
+    const suffix = (lang: string) => (multi ? `_${lang.toLowerCase()}` : "");
     const data = rows
-      .filter((r) => languages.some((l) => r.outputs[l]?.text))
+      .filter((r) => languages.some((l) => hasContent(r.outputs[l])))
       .map((r) => {
         const base: Record<string, string> = {
           product: r.name,
           attributes: r.attributes,
+          target_keyword: r.keyword,
         };
         for (const lang of languages) {
-          const key = rich ? `description_${lang.toLowerCase()}` : "description";
-          base[key] = r.outputs[lang]?.text ?? "";
+          const f = r.outputs[lang]?.fields ?? emptyFields();
+          const s = suffix(lang);
+          base[`title${s}`] = f.title;
+          base[`description${s}`] = f.description;
+          base[`bullets${s}`] = f.bullets.join(" | ");
+          base[`meta_description${s}`] = f.metaDescription;
+          base[`keywords${s}`] = f.keywords.join(", ");
         }
         return base;
       });
@@ -245,6 +387,11 @@ export default function GeneratePage() {
   const doneCount = eligible.reduce(
     (acc, r) =>
       acc + languages.filter((l) => r.outputs[l]?.status === "done").length,
+    0,
+  );
+  const failedCount = eligible.reduce(
+    (acc, r) =>
+      acc + languages.filter((l) => r.outputs[l]?.status === "error").length,
     0,
   );
   const estTokens = eligible.reduce(
@@ -306,6 +453,12 @@ export default function GeneratePage() {
           >
             <Download size={16} /> Export
           </button>
+          <button
+            onClick={clearAll}
+            className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-muted transition hover:bg-surface-2 hover:text-danger"
+          >
+            <Eraser size={16} /> Clear
+          </button>
         </div>
       </div>
 
@@ -357,9 +510,9 @@ export default function GeneratePage() {
         <table className="w-full border-collapse text-sm">
           <thead className="bg-surface-2 text-left text-muted">
             <tr>
-              <th className="w-1/4 px-4 py-3 font-medium">Product</th>
-              <th className="w-1/4 px-4 py-3 font-medium">Attributes</th>
-              <th className="px-4 py-3 font-medium">Description</th>
+              <th className="w-1/5 px-4 py-3 font-medium">Product</th>
+              <th className="w-1/5 px-4 py-3 font-medium">Attributes</th>
+              <th className="px-4 py-3 font-medium">SEO content pack</th>
               <th className="w-10 px-2 py-3" />
             </tr>
           </thead>
@@ -381,6 +534,14 @@ export default function GeneratePage() {
                       onChange={(e) => updateRow(row.id, { name: e.target.value })}
                       placeholder="Ceramic mug"
                       className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
+                    />
+                    <input
+                      value={row.keyword}
+                      onChange={(e) =>
+                        updateRow(row.id, { keyword: e.target.value })
+                      }
+                      placeholder="Target keyword (SEO, optional)"
+                      className="mt-1.5 w-full rounded-md border border-border bg-surface px-2 py-1 text-xs text-muted outline-none focus:border-brand-2 focus:text-foreground"
                     />
                     <div className="mt-1.5 flex items-center gap-2">
                       {row.image ? (
@@ -444,18 +605,65 @@ export default function GeneratePage() {
                           ) : status === "error" ? (
                             <span className="text-danger">{cell?.error}</span>
                           ) : (
-                            <textarea
-                              value={cell?.text ?? ""}
-                              onChange={(e) =>
-                                updateCell(row.id, lang, {
-                                  text: e.target.value,
-                                  status: "done",
-                                })
-                              }
-                              rows={cell?.text ? 4 : 1}
-                              placeholder="—"
-                              className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
-                            />
+                            (() => {
+                              const f = cell?.fields ?? emptyFields();
+                              return (
+                                <div className="space-y-2 rounded-lg border border-border/60 bg-surface/40 p-2">
+                                  <FieldBlock
+                                    label="Title"
+                                    value={f.title}
+                                    onChange={(v) =>
+                                      updateCellFields(row.id, lang, { title: v })
+                                    }
+                                  />
+                                  <FieldBlock
+                                    label="Description"
+                                    value={f.description}
+                                    rows={f.description ? 4 : 1}
+                                    onChange={(v) =>
+                                      updateCellFields(row.id, lang, {
+                                        description: v,
+                                      })
+                                    }
+                                  />
+                                  <FieldBlock
+                                    label="Bullets (one per line)"
+                                    value={f.bullets.join("\n")}
+                                    rows={f.bullets.length || 1}
+                                    onChange={(v) =>
+                                      updateCellFields(row.id, lang, {
+                                        bullets: v
+                                          .split("\n")
+                                          .map((s) => s.trim())
+                                          .filter(Boolean),
+                                      })
+                                    }
+                                  />
+                                  <FieldBlock
+                                    label="Meta description"
+                                    value={f.metaDescription}
+                                    rows={f.metaDescription ? 2 : 1}
+                                    onChange={(v) =>
+                                      updateCellFields(row.id, lang, {
+                                        metaDescription: v,
+                                      })
+                                    }
+                                  />
+                                  <FieldBlock
+                                    label="Keywords (comma separated)"
+                                    value={f.keywords.join(", ")}
+                                    onChange={(v) =>
+                                      updateCellFields(row.id, lang, {
+                                        keywords: v
+                                          .split(",")
+                                          .map((s) => s.trim())
+                                          .filter(Boolean),
+                                      })
+                                    }
+                                  />
+                                </div>
+                              );
+                            })()
                           )}
                         </div>
                       );
@@ -486,6 +694,9 @@ export default function GeneratePage() {
           <div className="flex items-center justify-between text-sm text-muted">
             <span>
               {doneCount} / {total} generated
+              {failedCount > 0 && (
+                <span className="ml-2 text-danger">· {failedCount} failed</span>
+              )}
             </span>
             <span>
               Est. cost{" "}
@@ -501,14 +712,25 @@ export default function GeneratePage() {
             />
           </div>
         </div>
-        <button
-          onClick={generateAll}
-          disabled={running}
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand-amber px-5 py-2.5 font-medium text-white shadow-[0_8px_30px_-8px_rgba(249,115,22,0.7)] transition hover:opacity-90 disabled:opacity-60"
-        >
-          {running && <Loader2 className="animate-spin" size={18} />}
-          {running ? "Generating…" : "Generate all"}
-        </button>
+        <div className="flex items-center gap-2">
+          {failedCount > 0 && (
+            <button
+              onClick={retryFailed}
+              disabled={running}
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 font-medium transition hover:bg-surface-2 disabled:opacity-60"
+            >
+              <RefreshCw size={16} /> Retry failed
+            </button>
+          )}
+          <button
+            onClick={generateAll}
+            disabled={running}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand-amber px-5 py-2.5 font-medium text-white shadow-[0_8px_30px_-8px_rgba(249,115,22,0.7)] transition hover:opacity-90 disabled:opacity-60"
+          >
+            {running && <Loader2 className="animate-spin" size={18} />}
+            {running ? "Generating…" : "Generate all"}
+          </button>
+        </div>
       </div>
     </div>
   );

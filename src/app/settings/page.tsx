@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { KeyRound, Check, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import {
+  KeyRound,
+  Check,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  Loader2,
+  CircleCheck,
+  CircleX,
+} from "lucide-react";
 import {
   PROVIDERS,
   getProviderInfo,
@@ -30,6 +39,10 @@ export default function SettingsPage() {
   const [langs, setLangs] = useState<string[]>(["English"]);
   const [show, setShow] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [keyCheck, setKeyCheck] = useState<
+    { valid: boolean; error?: string } | null
+  >(null);
 
   // Chargement initial depuis le navigateur.
   useEffect(() => {
@@ -52,6 +65,34 @@ export default function SettingsPage() {
     setProv(p);
     setKey(getKeyFor(p));
     setModel(defaultModelFor(p));
+    setKeyCheck(null);
+  }
+
+  // Vérifie la clé auprès du fournisseur sans consommer de tokens.
+  async function testKey() {
+    if (!apiKey.trim()) return;
+    setTesting(true);
+    setKeyCheck(null);
+    try {
+      const res = await fetch("/api/validate-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, apiKey }),
+      });
+      const data = await res.json();
+      setKeyCheck(
+        res.ok
+          ? { valid: true }
+          : { valid: false, error: data.error || "Invalid key." },
+      );
+    } catch (e) {
+      setKeyCheck({
+        valid: false,
+        error: e instanceof Error ? e.message : "Validation failed.",
+      });
+    } finally {
+      setTesting(false);
+    }
   }
 
   function save() {
@@ -114,7 +155,10 @@ export default function SettingsPage() {
           <input
             type={show ? "text" : "password"}
             value={apiKey}
-            onChange={(e) => setKey(e.target.value)}
+            onChange={(e) => {
+              setKey(e.target.value);
+              setKeyCheck(null);
+            }}
             placeholder={info.keyHint}
             className="w-full rounded-lg border border-border bg-surface-2 py-2.5 pl-9 pr-10 font-mono text-sm outline-none focus:border-brand-2"
           />
@@ -127,6 +171,31 @@ export default function SettingsPage() {
             {show ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={testKey}
+            disabled={testing || !apiKey.trim()}
+            className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm transition hover:bg-surface-2 disabled:opacity-40"
+          >
+            {testing ? (
+              <Loader2 className="animate-spin" size={15} />
+            ) : (
+              <ShieldCheck size={15} />
+            )}
+            {testing ? "Testing…" : "Test key"}
+          </button>
+          {keyCheck?.valid && (
+            <span className="inline-flex items-center gap-1.5 text-sm text-success">
+              <CircleCheck size={15} /> Key is valid
+            </span>
+          )}
+          {keyCheck && !keyCheck.valid && (
+            <span className="inline-flex items-center gap-1.5 text-sm text-danger">
+              <CircleX size={15} /> {keyCheck.error}
+            </span>
+          )}
+        </div>
         <p className="text-xs text-muted">
           Get a key at{" "}
           <a
@@ -137,7 +206,7 @@ export default function SettingsPage() {
           >
             {new URL(info.keysUrl).hostname}
           </a>
-          .
+          . Testing your key doesn&apos;t consume any tokens.
         </p>
       </div>
 

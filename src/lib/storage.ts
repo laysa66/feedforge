@@ -17,6 +17,7 @@ const KEY_MODEL = "feedforge.model";
 const KEY_USAGE = "feedforge.usage";
 const KEY_BRAND = "feedforge.brandVoice";
 const KEY_LANGS = "feedforge.languages";
+const KEY_SESSION = "feedforge.session"; // brouillon de la page Generate
 
 export type UsageRecord = {
   at: number;
@@ -125,4 +126,30 @@ export function addUsage(record: UsageRecord) {
 
 export function clearUsage() {
   safeSet(KEY_USAGE, JSON.stringify([]));
+}
+
+// --- Session de travail de la page Generate ---
+// On sauvegarde le brouillon (produits + fiches générées) pour survivre à un
+// rechargement de page. Reste 100 % local, comme le reste du modèle BYOK.
+export function getSession<T>(): T | null {
+  const raw = safeGet(KEY_SESSION);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+export function setSession(data: unknown) {
+  safeSet(KEY_SESSION, JSON.stringify(data));
+}
+
+export function clearSession() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(KEY_SESSION);
+  } catch {
+    /* ignore */
+  }
 }

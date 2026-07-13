@@ -17,8 +17,18 @@ type Body = {
   model: string;
   brandVoice?: string;
   language?: string;
+  keyword?: string; // mot-clé SEO cible à intégrer naturellement
   product: ProductInput;
   image?: ImageInput;
+};
+
+// Pack SEO structuré renvoyé pour chaque fiche produit.
+type SeoContent = {
+  title: string;
+  description: string;
+  bullets: string[];
+  metaDescription: string;
+  keywords: string[];
 };
 
 // URL de base pour les fournisseurs compatibles OpenAI.
@@ -33,14 +43,23 @@ function buildPrompts(
   brandVoice?: string,
   language?: string,
   hasImage?: boolean,
+  keyword?: string,
 ) {
   const lang = language?.trim() || "English";
   const system = [
-    "You are an expert e-commerce copywriter specialized in SEO-optimized product descriptions.",
-    `Write the product description in ${lang}: 2 short paragraphs, persuasive, natural, no empty superlatives.`,
-    "Subtly weave in relevant keywords. No title, no bullet lists, no preamble — only the description.",
+    "You are an expert e-commerce copywriter specialized in SEO-optimized product content.",
+    `Write every text field in ${lang}. Be persuasive and natural, no empty superlatives.`,
+    "Return ONLY a valid JSON object (no markdown, no code fences, no preamble) with exactly these keys:",
+    '- "title": a concise SEO product title (max ~60 characters).',
+    '- "description": the main body, 2 short paragraphs, keywords woven in subtly.',
+    '- "bullets": an array of 3 to 5 short key selling points (strings, no leading dash).',
+    '- "metaDescription": a compelling meta description of about 155 characters.',
+    '- "keywords": an array of 5 to 8 relevant SEO keywords or tags (strings).',
+    keyword?.trim()
+      ? `Naturally rank for this target keyword without stuffing: "${keyword.trim()}".`
+      : "",
     hasImage
-      ? "A product image is attached — use what you see in it (materials, colors, style, details) to enrich the description."
+      ? "A product image is attached — use what you see in it (materials, colors, style, details) to enrich the content."
       : "",
     brandVoice?.trim() ? `Follow this brand voice: ${brandVoice.trim()}` : "",
   ]
@@ -50,12 +69,75 @@ function buildPrompts(
   const user = [
     `Product: ${product.name.trim()}`,
     product.attributes?.trim() ? `Attributes: ${product.attributes.trim()}` : "",
-    "Write the description.",
+    "Generate the SEO content pack as JSON.",
   ]
     .filter(Boolean)
     .join("\n");
 
   return { system, user };
+}
+
+// Réessaie un appel fournisseur sur erreurs transitoires (429 rate-limit, 5xx)
+// avec un backoff exponentiel. Les autres erreurs (401, 400…) échouent tout de suite.
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const status =
+        err instanceof Anthropic.APIError || err instanceof OpenAI.APIError
+          ? err.status
+          : undefined;
+      const retryable = status === 429 || (status !== undefined && status >= 500);
+      if (!retryable || i === attempts - 1) throw err;
+      // 0.5s, 1s, 2s… (+ un petit jitter pour éviter les rafales synchrones).
+      const delay = 500 * 2 ** i + i * 150;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
+// Extrait un objet JSON d'une réponse LLM, tolérant aux code fences et au texte
+// parasite autour (on isole du premier { au dernier }).
+function parseSeoContent(raw: string): SeoContent {
+  const cleaned = raw
+    .replace(/^\s*```(?:json)?/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  const candidate = start !== -1 && end !== -1 ? cleaned.slice(start, end + 1) : cleaned;
+
+  const toStringArray = (v: unknown): string[] =>
+    Array.isArray(v)
+      ? v.map((x) => String(x).trim()).filter(Boolean)
+      : typeof v === "string" && v.trim()
+        ? [v.trim()]
+        : [];
+
+  try {
+    const obj = JSON.parse(candidate) as Record<string, unknown>;
+    return {
+      title: typeof obj.title === "string" ? obj.title.trim() : "",
+      description: typeof obj.description === "string" ? obj.description.trim() : "",
+      bullets: toStringArray(obj.bullets),
+      metaDescription:
+        typeof obj.metaDescription === "string" ? obj.metaDescription.trim() : "",
+      keywords: toStringArray(obj.keywords),
+    };
+  } catch {
+    // Parsing impossible : on ne perd rien, tout part dans la description.
+    return {
+      title: "",
+      description: raw.trim(),
+      bullets: [],
+      metaDescription: "",
+      keywords: [],
+    };
+  }
 }
 
 export async function POST(req: Request) {
@@ -66,7 +148,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { provider, apiKey, model, brandVoice, language, product, image } = body;
+  const { provider, apiKey, model, brandVoice, language, keyword, product, image } =
+    body;
 
   if (!apiKey?.trim()) {
     return NextResponse.json(
@@ -81,7 +164,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const { system, user } = buildPrompts(product, brandVoice, language, !!image);
+  const { system, user } = buildPrompts(
+    product,
+    brandVoice,
+    language,
+    !!image,
+    keyword,
+  );
 
   try {
     // --- Anthropic (Claude) : SDK dédié ---
@@ -100,19 +189,21 @@ export async function POST(req: Request) {
             { type: "text", text: user },
           ]
         : [{ type: "text", text: user }];
-      const message = await client.messages.create({
-        model,
-        max_tokens: 1024,
-        system,
-        messages: [{ role: "user", content }],
-      });
-      const description = message.content
+      const message = await withRetry(() =>
+        client.messages.create({
+          model,
+          max_tokens: 1500,
+          system,
+          messages: [{ role: "user", content }],
+        }),
+      );
+      const raw = message.content
         .filter((b) => b.type === "text")
         .map((b) => (b as { text: string }).text)
         .join("\n")
         .trim();
       return NextResponse.json({
-        description,
+        content: parseSeoContent(raw),
         usage: {
           inputTokens: message.usage.input_tokens,
           outputTokens: message.usage.output_tokens,
@@ -138,17 +229,19 @@ export async function POST(req: Request) {
         image_url: { url: `data:${image.mediaType};base64,${image.data}` },
       });
     }
-    const completion = await client.chat.completions.create({
-      model,
-      max_tokens: 1024,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: userContent },
-      ],
-    });
-    const description = completion.choices[0]?.message?.content?.trim() ?? "";
+    const completion = await withRetry(() =>
+      client.chat.completions.create({
+        model,
+        max_tokens: 1500,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userContent },
+        ],
+      }),
+    );
+    const raw = completion.choices[0]?.message?.content?.trim() ?? "";
     return NextResponse.json({
-      description,
+      content: parseSeoContent(raw),
       usage: {
         inputTokens: completion.usage?.prompt_tokens ?? 0,
         outputTokens: completion.usage?.completion_tokens ?? 0,
