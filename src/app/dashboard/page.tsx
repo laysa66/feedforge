@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Boxes, Coins, Cpu, Trash2 } from "lucide-react";
-import { getUsage, clearUsage, type UsageRecord } from "@/lib/storage";
+import {
+  getUsage,
+  clearUsage,
+  hydrateDynamicModels,
+  type UsageRecord,
+} from "@/lib/storage";
 import { findModel } from "@/lib/models";
 import CountUp from "@/components/CountUp";
 
@@ -59,6 +64,7 @@ export default function DashboardPage() {
   const [period, setPeriod] = useState<Period>("day");
 
   useEffect(() => {
+    hydrateDynamicModels();
     setUsage(getUsage());
   }, []);
 

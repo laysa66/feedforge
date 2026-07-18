@@ -10,11 +10,13 @@ import {
   Loader2,
   CircleCheck,
   CircleX,
+  RefreshCw,
 } from "lucide-react";
 import {
   PROVIDERS,
   getProviderInfo,
   defaultModelFor,
+  type ModelInfo,
   type ProviderId,
 } from "@/lib/models";
 import {
@@ -28,8 +30,17 @@ import {
   setBrandVoice,
   getLanguages,
   setLanguages,
+  hydrateDynamicModels,
+  loadOpenRouterModels,
 } from "@/lib/storage";
 import { LANGUAGES } from "@/lib/languages";
+
+// Tarif $/M tokens : plus de décimales pour les tout petits prix, moins sinon.
+function fmtPrice(v: number): string {
+  if (v === 0) return "0";
+  if (v < 1) return v.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+  return v.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+}
 
 export default function SettingsPage() {
   const [provider, setProv] = useState<ProviderId>(PROVIDERS[0].id);
@@ -43,16 +54,35 @@ export default function SettingsPage() {
   const [keyCheck, setKeyCheck] = useState<
     { valid: boolean; error?: string } | null
   >(null);
+  const [orModels, setOrModels] = useState<ModelInfo[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
 
   // Chargement initial depuis le navigateur.
   useEffect(() => {
+    hydrateDynamicModels();
     const p = getProvider();
     setProv(p);
     setKey(getKeyFor(p));
     setModel(getModelId());
     setBrand(getBrandVoice());
     setLangs(getLanguages());
+    if (p === "openrouter") fetchOrModels();
   }, []);
+
+  // Récupère la liste OpenRouter à jour (tarifs réels) depuis leur API.
+  async function fetchOrModels() {
+    setLoadingModels(true);
+    setModelsError(null);
+    try {
+      const models = await loadOpenRouterModels();
+      setOrModels(models);
+    } catch (e) {
+      setModelsError(e instanceof Error ? e.message : "Failed to load models.");
+    } finally {
+      setLoadingModels(false);
+    }
+  }
 
   function toggleLang(lang: string) {
     setLangs((cur) =>
@@ -66,6 +96,7 @@ export default function SettingsPage() {
     setKey(getKeyFor(p));
     setModel(defaultModelFor(p));
     setKeyCheck(null);
+    if (p === "openrouter" && !orModels.length) fetchOrModels();
   }
 
   // Vérifie la clé auprès du fournisseur sans consommer de tokens.
@@ -106,6 +137,10 @@ export default function SettingsPage() {
   }
 
   const info = getProviderInfo(provider);
+  // Pour OpenRouter, on affiche la liste live (avec tarifs réels) si on l'a,
+  // sinon la liste statique de secours.
+  const modelList =
+    provider === "openrouter" && orModels.length ? orModels : info.models;
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
@@ -211,20 +246,45 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">Model</label>
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium">Model</label>
+          {provider === "openrouter" && (
+            <button
+              type="button"
+              onClick={fetchOrModels}
+              disabled={loadingModels}
+              className="inline-flex items-center gap-1.5 text-xs text-muted transition hover:text-foreground disabled:opacity-50"
+            >
+              {loadingModels ? (
+                <Loader2 className="animate-spin" size={13} />
+              ) : (
+                <RefreshCw size={13} />
+              )}
+              {loadingModels ? "Loading…" : "Refresh live models"}
+            </button>
+          )}
+        </div>
         <select
           value={model}
           onChange={(e) => setModel(e.target.value)}
           className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-sm outline-none focus:border-brand-2"
         >
-          {info.models.map((m) => (
+          {modelList.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.label} — ${m.inputPerMTok}/${m.outputPerMTok} per M tokens
+              {m.label} — ${fmtPrice(m.inputPerMTok)}/${fmtPrice(m.outputPerMTok)}{" "}
+              per M tokens
             </option>
           ))}
         </select>
+        {modelsError && (
+          <p className="text-xs text-danger">
+            Couldn&apos;t load live models ({modelsError}). Showing fallback list.
+          </p>
+        )}
         <p className="text-xs text-muted">
-          Indicative pricing — actual billing depends on the provider.
+          {provider === "openrouter"
+            ? "Live pricing from OpenRouter's API."
+            : "Indicative pricing — actual billing depends on the provider."}
         </p>
       </div>
 

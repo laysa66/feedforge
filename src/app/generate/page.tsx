@@ -25,6 +25,7 @@ import {
   getSession,
   setSession,
   clearSession,
+  hydrateDynamicModels,
 } from "@/lib/storage";
 import { estimateCost } from "@/lib/models";
 
@@ -169,6 +170,7 @@ export default function GeneratePage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    hydrateDynamicModels();
     setHasKey(!!getApiKey());
     setModel(getModelId());
     setBrandLen(getBrandVoice().length);

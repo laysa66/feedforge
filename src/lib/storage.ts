@@ -7,6 +7,8 @@
 import {
   DEFAULT_PROVIDER,
   defaultModelFor,
+  registerDynamicModels,
+  type ModelInfo,
   type ProviderId,
 } from "./models";
 import { DEFAULT_LANGUAGES } from "./languages";
@@ -18,6 +20,7 @@ const KEY_USAGE = "feedforge.usage";
 const KEY_BRAND = "feedforge.brandVoice";
 const KEY_LANGS = "feedforge.languages";
 const KEY_SESSION = "feedforge.session"; // brouillon de la page Generate
+const KEY_OR_MODELS = "feedforge.openrouterModels"; // cache des modèles OpenRouter
 
 export type UsageRecord = {
   at: number;
@@ -151,5 +154,49 @@ export function clearSession() {
     window.localStorage.removeItem(KEY_SESSION);
   } catch {
     /* ignore */
+  }
+}
+
+// --- Modèles OpenRouter (chargés dynamiquement) ---
+// On garde en cache la dernière liste tirée de l'API pour l'afficher tout de
+// suite et pour que l'estimation de coût connaisse les tarifs même hors ligne.
+function readCachedOpenRouterModels(): ModelInfo[] {
+  const raw = safeGet(KEY_OR_MODELS);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as ModelInfo[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+// Réhydrate le registre de modèles dynamiques depuis le cache local (à appeler
+// au montage des pages pour que findModel/estimateCost trouvent les tarifs).
+export function hydrateDynamicModels() {
+  const cached = readCachedOpenRouterModels();
+  if (cached.length) registerDynamicModels(cached);
+}
+
+// Récupère la liste à jour depuis notre route serveur, met à jour le cache et
+// le registre, puis renvoie la liste. Retombe sur le cache en cas d'échec.
+export async function loadOpenRouterModels(): Promise<ModelInfo[]> {
+  try {
+    const res = await fetch("/api/models/openrouter");
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to load models.");
+    const models = (data.models as ModelInfo[]) ?? [];
+    if (models.length) {
+      safeSet(KEY_OR_MODELS, JSON.stringify(models));
+      registerDynamicModels(models);
+    }
+    return models;
+  } catch (e) {
+    const cached = readCachedOpenRouterModels();
+    if (cached.length) {
+      registerDynamicModels(cached);
+      return cached;
+    }
+    throw e;
   }
 }
