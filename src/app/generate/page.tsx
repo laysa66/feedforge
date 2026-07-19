@@ -26,15 +26,17 @@ import {
   setSession,
   clearSession,
   hydrateDynamicModels,
+  getOutputConfig,
 } from "@/lib/storage";
 import { estimateCost } from "@/lib/models";
+import {
+  DEFAULT_OUTPUT_CONFIG,
+  type OutputConfig,
+  type SeoFieldKey,
+} from "@/lib/output";
 
 // Nombre de générations lancées en parallèle (compromis vitesse / rate limit).
 const CONCURRENCY = 4;
-// Estimation grossière de la sortie par fiche (pour le coût prévisionnel).
-// Le pack SEO complet (titre + desc + bullets + meta + keywords) est plus long
-// qu'un simple paragraphe.
-const EST_OUTPUT_TOKENS = 520;
 const SYSTEM_OVERHEAD_CHARS = 320;
 
 type CellStatus = "idle" | "loading" | "done" | "error";
@@ -166,6 +168,7 @@ export default function GeneratePage() {
   const [model, setModel] = useState("");
   const [brandLen, setBrandLen] = useState(0);
   const [languages, setLanguages] = useState<string[]>(["English"]);
+  const [output, setOutput] = useState<OutputConfig>(DEFAULT_OUTPUT_CONFIG);
   const [hydrated, setHydrated] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -175,6 +178,7 @@ export default function GeneratePage() {
     setModel(getModelId());
     setBrandLen(getBrandVoice().length);
     setLanguages(getLanguages());
+    setOutput(getOutputConfig());
     // Restaure le brouillon précédent (produits + fiches déjà générées).
     const saved = getSession<Row[]>();
     if (saved && saved.length) {
@@ -285,6 +289,7 @@ export default function GeneratePage() {
           brandVoice: getBrandVoice(),
           language: unit.lang,
           keyword: unit.keyword,
+          output: getOutputConfig(),
           product: { name: unit.name, attributes: unit.attributes },
           image: unit.image,
         }),
@@ -355,25 +360,43 @@ export default function GeneratePage() {
   function exportCsv() {
     const multi = languages.length > 1;
     const suffix = (lang: string) => (multi ? `_${lang.toLowerCase()}` : "");
-    const data = rows
-      .filter((r) => languages.some((l) => hasContent(r.outputs[l])))
-      .map((r) => {
-        const base: Record<string, string> = {
-          product: r.name,
-          attributes: r.attributes,
-          target_keyword: r.keyword,
-        };
-        for (const lang of languages) {
-          const f = r.outputs[lang]?.fields ?? emptyFields();
-          const s = suffix(lang);
-          base[`title${s}`] = f.title;
-          base[`description${s}`] = f.description;
-          base[`bullets${s}`] = f.bullets.join(" | ");
+    const exportable = rows.filter((r) =>
+      languages.some((l) => hasContent(r.outputs[l])),
+    );
+    // On exporte un champ s'il est sélectionné OU s'il a du contenu quelque part.
+    const includes = (key: SeoFieldKey, has: (f: SeoFields) => boolean) =>
+      output.fields[key] ||
+      exportable.some((r) =>
+        languages.some((l) => {
+          const f = r.outputs[l]?.fields;
+          return f ? has(f) : false;
+        }),
+      );
+    const cols = {
+      title: includes("title", (f) => !!f.title),
+      description: includes("description", (f) => !!f.description),
+      bullets: includes("bullets", (f) => f.bullets.length > 0),
+      metaDescription: includes("metaDescription", (f) => !!f.metaDescription),
+      keywords: includes("keywords", (f) => f.keywords.length > 0),
+    };
+    const data = exportable.map((r) => {
+      const base: Record<string, string> = {
+        product: r.name,
+        attributes: r.attributes,
+        target_keyword: r.keyword,
+      };
+      for (const lang of languages) {
+        const f = r.outputs[lang]?.fields ?? emptyFields();
+        const s = suffix(lang);
+        if (cols.title) base[`title${s}`] = f.title;
+        if (cols.description) base[`description${s}`] = f.description;
+        if (cols.bullets) base[`bullets${s}`] = f.bullets.join(" | ");
+        if (cols.metaDescription)
           base[`meta_description${s}`] = f.metaDescription;
-          base[`keywords${s}`] = f.keywords.join(", ");
-        }
-        return base;
-      });
+        if (cols.keywords) base[`keywords${s}`] = f.keywords.join(", ");
+      }
+      return base;
+    });
     const csv = Papa.unparse(data);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -396,6 +419,12 @@ export default function GeneratePage() {
       acc + languages.filter((l) => r.outputs[l]?.status === "error").length,
     0,
   );
+  // Sortie estimée : varie avec la longueur et le nombre de champs demandés.
+  const selectedFields = Object.values(output.fields).filter(Boolean).length;
+  const lengthBase = { short: 320, medium: 520, long: 760 }[output.length];
+  const estOutputPerUnit = Math.round(
+    lengthBase * (0.3 + 0.7 * (selectedFields / 5)),
+  );
   const estTokens = eligible.reduce(
     (acc, r) => {
       const perUnit = Math.ceil(
@@ -403,7 +432,7 @@ export default function GeneratePage() {
           4,
       );
       acc.input += perUnit * languages.length;
-      acc.output += EST_OUTPUT_TOKENS * languages.length;
+      acc.output += estOutputPerUnit * languages.length;
       return acc;
     },
     { input: 0, output: 0 },
@@ -609,60 +638,77 @@ export default function GeneratePage() {
                           ) : (
                             (() => {
                               const f = cell?.fields ?? emptyFields();
+                              // On affiche un champ s'il est sélectionné OU s'il
+                              // porte déjà du contenu (rien n'est masqué en douce).
+                              const show = (key: SeoFieldKey, has: boolean) =>
+                                output.fields[key] || has;
                               return (
                                 <div className="space-y-2 rounded-lg border border-border/60 bg-surface/40 p-2">
-                                  <FieldBlock
-                                    label="Title"
-                                    value={f.title}
-                                    onChange={(v) =>
-                                      updateCellFields(row.id, lang, { title: v })
-                                    }
-                                  />
-                                  <FieldBlock
-                                    label="Description"
-                                    value={f.description}
-                                    rows={f.description ? 4 : 1}
-                                    onChange={(v) =>
-                                      updateCellFields(row.id, lang, {
-                                        description: v,
-                                      })
-                                    }
-                                  />
-                                  <FieldBlock
-                                    label="Bullets (one per line)"
-                                    value={f.bullets.join("\n")}
-                                    rows={f.bullets.length || 1}
-                                    onChange={(v) =>
-                                      updateCellFields(row.id, lang, {
-                                        bullets: v
-                                          .split("\n")
-                                          .map((s) => s.trim())
-                                          .filter(Boolean),
-                                      })
-                                    }
-                                  />
-                                  <FieldBlock
-                                    label="Meta description"
-                                    value={f.metaDescription}
-                                    rows={f.metaDescription ? 2 : 1}
-                                    onChange={(v) =>
-                                      updateCellFields(row.id, lang, {
-                                        metaDescription: v,
-                                      })
-                                    }
-                                  />
-                                  <FieldBlock
-                                    label="Keywords (comma separated)"
-                                    value={f.keywords.join(", ")}
-                                    onChange={(v) =>
-                                      updateCellFields(row.id, lang, {
-                                        keywords: v
-                                          .split(",")
-                                          .map((s) => s.trim())
-                                          .filter(Boolean),
-                                      })
-                                    }
-                                  />
+                                  {show("title", !!f.title) && (
+                                    <FieldBlock
+                                      label="Title"
+                                      value={f.title}
+                                      onChange={(v) =>
+                                        updateCellFields(row.id, lang, { title: v })
+                                      }
+                                    />
+                                  )}
+                                  {show("description", !!f.description) && (
+                                    <FieldBlock
+                                      label="Description"
+                                      value={f.description}
+                                      rows={f.description ? 4 : 1}
+                                      onChange={(v) =>
+                                        updateCellFields(row.id, lang, {
+                                          description: v,
+                                        })
+                                      }
+                                    />
+                                  )}
+                                  {show("bullets", f.bullets.length > 0) && (
+                                    <FieldBlock
+                                      label="Bullets (one per line)"
+                                      value={f.bullets.join("\n")}
+                                      rows={f.bullets.length || 1}
+                                      onChange={(v) =>
+                                        updateCellFields(row.id, lang, {
+                                          bullets: v
+                                            .split("\n")
+                                            .map((s) => s.trim())
+                                            .filter(Boolean),
+                                        })
+                                      }
+                                    />
+                                  )}
+                                  {show(
+                                    "metaDescription",
+                                    !!f.metaDescription,
+                                  ) && (
+                                    <FieldBlock
+                                      label="Meta description"
+                                      value={f.metaDescription}
+                                      rows={f.metaDescription ? 2 : 1}
+                                      onChange={(v) =>
+                                        updateCellFields(row.id, lang, {
+                                          metaDescription: v,
+                                        })
+                                      }
+                                    />
+                                  )}
+                                  {show("keywords", f.keywords.length > 0) && (
+                                    <FieldBlock
+                                      label="Keywords (comma separated)"
+                                      value={f.keywords.join(", ")}
+                                      onChange={(v) =>
+                                        updateCellFields(row.id, lang, {
+                                          keywords: v
+                                            .split(",")
+                                            .map((s) => s.trim())
+                                            .filter(Boolean),
+                                        })
+                                      }
+                                    />
+                                  )}
                                 </div>
                               );
                             })()

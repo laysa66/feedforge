@@ -32,8 +32,19 @@ import {
   setLanguages,
   hydrateDynamicModels,
   loadOpenRouterModels,
+  getOutputConfig,
+  setOutputConfig,
 } from "@/lib/storage";
 import { LANGUAGES } from "@/lib/languages";
+import {
+  DEFAULT_OUTPUT_CONFIG,
+  FIELD_DEFS,
+  LENGTH_PRESETS,
+  NICHE_PRESETS,
+  TONE_PRESETS,
+  type OutputConfig,
+  type SeoFieldKey,
+} from "@/lib/output";
 
 // Tarif $/M tokens : plus de décimales pour les tout petits prix, moins sinon.
 function fmtPrice(v: number): string {
@@ -57,6 +68,7 @@ export default function SettingsPage() {
   const [orModels, setOrModels] = useState<ModelInfo[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  const [output, setOutput] = useState<OutputConfig>(DEFAULT_OUTPUT_CONFIG);
 
   // Chargement initial depuis le navigateur.
   useEffect(() => {
@@ -67,8 +79,18 @@ export default function SettingsPage() {
     setModel(getModelId());
     setBrand(getBrandVoice());
     setLangs(getLanguages());
+    setOutput(getOutputConfig());
     if (p === "openrouter") fetchOrModels();
   }, []);
+
+  function toggleField(key: SeoFieldKey) {
+    setOutput((o) => {
+      const fields = { ...o.fields, [key]: !o.fields[key] };
+      // Toujours garder au moins un champ actif.
+      if (!Object.values(fields).some(Boolean)) return o;
+      return { ...o, fields };
+    });
+  }
 
   // Récupère la liste OpenRouter à jour (tarifs réels) depuis leur API.
   async function fetchOrModels() {
@@ -132,6 +154,7 @@ export default function SettingsPage() {
     setModelId(model);
     setBrandVoice(brand);
     setLanguages(langs);
+    setOutputConfig(output);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -286,6 +309,101 @@ export default function SettingsPage() {
             ? "Live pricing from OpenRouter's API."
             : "Indicative pricing — actual billing depends on the provider."}
         </p>
+      </div>
+
+      <div className="space-y-4 rounded-xl border border-border bg-surface/40 p-4">
+        <div>
+          <h2 className="text-sm font-medium">Generation output</h2>
+          <p className="mt-0.5 text-xs text-muted">
+            Shape the copy and pick which fields to forge.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted">Length</label>
+          <div className="grid grid-cols-3 gap-2">
+            {LENGTH_PRESETS.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                onClick={() => setOutput((o) => ({ ...o, length: l.id }))}
+                className={`rounded-lg border px-3 py-2 text-sm transition ${
+                  output.length === l.id
+                    ? "border-brand-2 bg-brand-2/10 text-foreground"
+                    : "border-border bg-surface text-muted hover:text-foreground"
+                }`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted">Tone</label>
+            <select
+              value={output.tone}
+              onChange={(e) =>
+                setOutput((o) => ({ ...o, tone: e.target.value }))
+              }
+              className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand-2"
+            >
+              {TONE_PRESETS.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted">
+              Niche preset
+            </label>
+            <select
+              value={output.niche}
+              onChange={(e) =>
+                setOutput((o) => ({ ...o, niche: e.target.value }))
+              }
+              className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand-2"
+            >
+              {NICHE_PRESETS.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted">
+            Fields to generate
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {FIELD_DEFS.map((f) => {
+              const active = output.fields[f.key];
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => toggleField(f.key)}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition ${
+                    active
+                      ? "border-brand-2 bg-brand-2/10 text-foreground"
+                      : "border-border bg-surface text-muted hover:text-foreground"
+                  }`}
+                >
+                  {active ? <Check size={14} /> : null}
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted">
+            Fewer fields = fewer tokens = lower cost.
+          </p>
+        </div>
       </div>
 
       <div className="space-y-2">

@@ -2,6 +2,14 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import type { ProviderId } from "@/lib/models";
+import {
+  FIELD_DEFS,
+  LENGTH_MAX_TOKENS,
+  NICHE_PRESETS,
+  TONE_PRESETS,
+  normalizeOutputConfig,
+  type OutputConfig,
+} from "@/lib/output";
 
 // Route de génération d'UNE fiche produit, multi-fournisseurs (BYOK).
 // Le client envoie SA propre clé : on l'utilise le temps de la requête,
@@ -18,6 +26,7 @@ type Body = {
   brandVoice?: string;
   language?: string;
   keyword?: string; // mot-clé SEO cible à intégrer naturellement
+  output?: OutputConfig; // longueur, ton, niche, champs à générer
   product: ProductInput;
   image?: ImageInput;
 };
@@ -40,21 +49,26 @@ const OPENAI_COMPATIBLE_BASE: Partial<Record<ProviderId, string>> = {
 
 function buildPrompts(
   product: ProductInput,
+  cfg: OutputConfig,
   brandVoice?: string,
   language?: string,
   hasImage?: boolean,
   keyword?: string,
 ) {
   const lang = language?.trim() || "English";
+  // Seuls les champs cochés sont demandés → moins de tokens, sortie ciblée.
+  const requested = FIELD_DEFS.filter((f) => cfg.fields[f.key]);
+  const tonePrompt = TONE_PRESETS.find((t) => t.id === cfg.tone)?.prompt ?? "";
+  const nichePrompt = NICHE_PRESETS.find((n) => n.id === cfg.niche)?.prompt ?? "";
+
   const system = [
     "You are an expert e-commerce copywriter specialized in SEO-optimized product content.",
     `Write every text field in ${lang}. Be persuasive and natural, no empty superlatives.`,
     "Return ONLY a valid JSON object (no markdown, no code fences, no preamble) with exactly these keys:",
-    '- "title": a concise SEO product title (max ~60 characters).',
-    '- "description": the main body, 2 short paragraphs, keywords woven in subtly.',
-    '- "bullets": an array of 3 to 5 short key selling points (strings, no leading dash).',
-    '- "metaDescription": a compelling meta description of about 155 characters.',
-    '- "keywords": an array of 5 to 8 relevant SEO keywords or tags (strings).',
+    ...requested.map((f) => `- ${f.prompt(cfg.length)}`),
+    "Include no other keys.",
+    nichePrompt,
+    tonePrompt,
     keyword?.trim()
       ? `Naturally rank for this target keyword without stuffing: "${keyword.trim()}".`
       : "",
@@ -150,6 +164,8 @@ export async function POST(req: Request) {
 
   const { provider, apiKey, model, brandVoice, language, keyword, product, image } =
     body;
+  const cfg = normalizeOutputConfig(body.output);
+  const maxTokens = LENGTH_MAX_TOKENS[cfg.length];
 
   if (!apiKey?.trim()) {
     return NextResponse.json(
@@ -166,6 +182,7 @@ export async function POST(req: Request) {
 
   const { system, user } = buildPrompts(
     product,
+    cfg,
     brandVoice,
     language,
     !!image,
@@ -192,7 +209,7 @@ export async function POST(req: Request) {
       const message = await withRetry(() =>
         client.messages.create({
           model,
-          max_tokens: 1500,
+          max_tokens: maxTokens,
           system,
           messages: [{ role: "user", content }],
         }),
@@ -232,7 +249,7 @@ export async function POST(req: Request) {
     const completion = await withRetry(() =>
       client.chat.completions.create({
         model,
-        max_tokens: 1500,
+        max_tokens: maxTokens,
         messages: [
           { role: "system", content: system },
           { role: "user", content: userContent },

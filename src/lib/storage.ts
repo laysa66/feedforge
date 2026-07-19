@@ -12,6 +12,11 @@ import {
   type ProviderId,
 } from "./models";
 import { DEFAULT_LANGUAGES } from "./languages";
+import {
+  DEFAULT_OUTPUT_CONFIG,
+  normalizeOutputConfig,
+  type OutputConfig,
+} from "./output";
 
 const KEY_PROVIDER = "feedforge.provider";
 const KEY_KEYS = "feedforge.keys"; // map { provider: clé }
@@ -21,6 +26,7 @@ const KEY_BRAND = "feedforge.brandVoice";
 const KEY_LANGS = "feedforge.languages";
 const KEY_SESSION = "feedforge.session"; // brouillon de la page Generate
 const KEY_OR_MODELS = "feedforge.openrouterModels"; // cache des modèles OpenRouter
+const KEY_OUTPUT = "feedforge.output"; // contrôles de génération
 
 export type UsageRecord = {
   at: number;
@@ -107,6 +113,20 @@ export function getLanguages(): string[] {
 }
 export function setLanguages(langs: string[]) {
   safeSet(KEY_LANGS, JSON.stringify(langs.length ? langs : DEFAULT_LANGUAGES));
+}
+
+// --- Contrôles de génération (longueur, ton, niche, champs) ---
+export function getOutputConfig(): OutputConfig {
+  const raw = safeGet(KEY_OUTPUT);
+  if (!raw) return DEFAULT_OUTPUT_CONFIG;
+  try {
+    return normalizeOutputConfig(JSON.parse(raw));
+  } catch {
+    return DEFAULT_OUTPUT_CONFIG;
+  }
+}
+export function setOutputConfig(cfg: OutputConfig) {
+  safeSet(KEY_OUTPUT, JSON.stringify(cfg));
 }
 
 // --- Historique de consommation ---
