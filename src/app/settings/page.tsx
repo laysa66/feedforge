@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   KeyRound,
   Check,
@@ -54,6 +55,7 @@ function fmtPrice(v: number): string {
 }
 
 export default function SettingsPage() {
+  const { t } = useTranslation();
   const [provider, setProv] = useState<ProviderId>(PROVIDERS[0].id);
   const [apiKey, setKey] = useState("");
   const [model, setModel] = useState(PROVIDERS[0].models[0].id);
@@ -168,24 +170,25 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="mt-1 text-muted">
-          Choose your AI provider and configure your key.
-        </p>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {t("settings.title")}
+        </h1>
+        <p className="mt-1 text-muted">{t("settings.subtitle")}</p>
       </div>
 
       <div className="glass flex items-start gap-3 rounded-xl p-4 text-sm">
         <ShieldCheck className="mt-0.5 shrink-0 text-success" size={18} />
         <p className="text-muted">
-          Your keys are stored{" "}
-          <strong className="text-foreground">only in your browser</strong> and
-          are sent to our servers only for the duration of a generation — never
-          retained. You pay for your usage directly with the provider.
+          {t("settings.privacyPre")}{" "}
+          <strong className="text-foreground">
+            {t("settings.privacyBold")}
+          </strong>{" "}
+          {t("settings.privacyPost")}
         </p>
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">AI provider</label>
+        <label className="text-sm font-medium">{t("settings.provider")}</label>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {PROVIDERS.map((p) => (
             <button
@@ -204,7 +207,9 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">API key — {info.label}</label>
+        <label className="text-sm font-medium">
+          {t("settings.apiKey", { provider: info.label })}
+        </label>
         <div className="relative">
           <KeyRound
             size={16}
@@ -241,11 +246,11 @@ export default function SettingsPage() {
             ) : (
               <ShieldCheck size={15} />
             )}
-            {testing ? "Testing…" : "Test key"}
+            {testing ? t("settings.testing") : t("settings.testKey")}
           </button>
           {keyCheck?.valid && (
             <span className="inline-flex items-center gap-1.5 text-sm text-success">
-              <CircleCheck size={15} /> Key is valid
+              <CircleCheck size={15} /> {t("settings.keyValid")}
             </span>
           )}
           {keyCheck && !keyCheck.valid && (
@@ -255,7 +260,7 @@ export default function SettingsPage() {
           )}
         </div>
         <p className="text-xs text-muted">
-          Get a key at{" "}
+          {t("settings.getKeyAt")}{" "}
           <a
             href={info.keysUrl}
             target="_blank"
@@ -264,13 +269,13 @@ export default function SettingsPage() {
           >
             {new URL(info.keysUrl).hostname}
           </a>
-          . Testing your key doesn&apos;t consume any tokens.
+          {t("settings.noTokens")}
         </p>
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-sm font-medium">Model</label>
+          <label className="text-sm font-medium">{t("settings.model")}</label>
           {provider === "openrouter" && (
             <button
               type="button"
@@ -283,7 +288,9 @@ export default function SettingsPage() {
               ) : (
                 <RefreshCw size={13} />
               )}
-              {loadingModels ? "Loading…" : "Refresh live models"}
+              {loadingModels
+                ? t("settings.loadingModels")
+                : t("settings.refreshModels")}
             </button>
           )}
         </div>
@@ -295,32 +302,34 @@ export default function SettingsPage() {
           {modelList.map((m) => (
             <option key={m.id} value={m.id}>
               {m.label} — ${fmtPrice(m.inputPerMTok)}/${fmtPrice(m.outputPerMTok)}{" "}
-              per M tokens
+              {t("settings.perMTokens")}
             </option>
           ))}
         </select>
         {modelsError && (
           <p className="text-xs text-danger">
-            Couldn&apos;t load live models ({modelsError}). Showing fallback list.
+            {t("settings.modelsError", { error: modelsError })}
           </p>
         )}
         <p className="text-xs text-muted">
           {provider === "openrouter"
-            ? "Live pricing from OpenRouter's API."
-            : "Indicative pricing — actual billing depends on the provider."}
+            ? t("settings.livePricing")
+            : t("settings.indicativePricing")}
         </p>
       </div>
 
       <div className="space-y-4 rounded-xl border border-border bg-surface/40 p-4">
         <div>
-          <h2 className="text-sm font-medium">Generation output</h2>
+          <h2 className="text-sm font-medium">{t("settings.genOutput")}</h2>
           <p className="mt-0.5 text-xs text-muted">
-            Shape the copy and pick which fields to forge.
+            {t("settings.genOutputSub")}
           </p>
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted">Length</label>
+          <label className="text-xs font-medium text-muted">
+            {t("settings.length")}
+          </label>
           <div className="grid grid-cols-3 gap-2">
             {LENGTH_PRESETS.map((l) => (
               <button
@@ -333,7 +342,7 @@ export default function SettingsPage() {
                     : "border-border bg-surface text-muted hover:text-foreground"
                 }`}
               >
-                {l.label}
+                {t(`settings.lengths.${l.id}`)}
               </button>
             ))}
           </div>
@@ -341,7 +350,9 @@ export default function SettingsPage() {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted">Tone</label>
+            <label className="text-xs font-medium text-muted">
+              {t("settings.tone")}
+            </label>
             <select
               value={output.tone}
               onChange={(e) =>
@@ -349,16 +360,16 @@ export default function SettingsPage() {
               }
               className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-brand-2"
             >
-              {TONE_PRESETS.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
+              {TONE_PRESETS.map((tp) => (
+                <option key={tp.id} value={tp.id}>
+                  {t(`settings.tones.${tp.id || "default"}`)}
                 </option>
               ))}
             </select>
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted">
-              Niche preset
+              {t("settings.niche")}
             </label>
             <select
               value={output.niche}
@@ -369,7 +380,7 @@ export default function SettingsPage() {
             >
               {NICHE_PRESETS.map((n) => (
                 <option key={n.id} value={n.id}>
-                  {n.label}
+                  {t(`settings.niches.${n.id || "none"}`)}
                 </option>
               ))}
             </select>
@@ -378,7 +389,7 @@ export default function SettingsPage() {
 
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted">
-            Fields to generate
+            {t("settings.fields")}
           </label>
           <div className="flex flex-wrap gap-2">
             {FIELD_DEFS.map((f) => {
@@ -395,19 +406,19 @@ export default function SettingsPage() {
                   }`}
                 >
                   {active ? <Check size={14} /> : null}
-                  {f.label}
+                  {t(`settings.fieldNames.${f.key}`)}
                 </button>
               );
             })}
           </div>
-          <p className="text-xs text-muted">
-            Fewer fields = fewer tokens = lower cost.
-          </p>
+          <p className="text-xs text-muted">{t("settings.fewerFields")}</p>
         </div>
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">Output languages</label>
+        <label className="text-sm font-medium">
+          {t("settings.outputLanguages")}
+        </label>
         <div className="flex flex-wrap gap-2">
           {LANGUAGES.map((lang) => {
             const active = langs.includes(lang);
@@ -427,20 +438,19 @@ export default function SettingsPage() {
             );
           })}
         </div>
-        <p className="text-xs text-muted">
-          Each product is generated once per selected language.
-        </p>
+        <p className="text-xs text-muted">{t("settings.eachLanguage")}</p>
       </div>
 
       <div className="space-y-2">
         <label className="text-sm font-medium">
-          Brand voice <span className="text-muted">(optional)</span>
+          {t("settings.brandVoice")}{" "}
+          <span className="text-muted">{t("settings.optional")}</span>
         </label>
         <textarea
           value={brand}
           onChange={(e) => setBrand(e.target.value)}
           rows={3}
-          placeholder="e.g. warm and premium, casual tone, eco-friendly vocabulary…"
+          placeholder={t("settings.brandPlaceholder")}
           className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-sm outline-none focus:border-brand-2"
         />
       </div>
@@ -450,7 +460,7 @@ export default function SettingsPage() {
         className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand-amber px-5 py-2.5 font-medium text-white shadow-[0_8px_30px_-8px_rgba(249,115,22,0.7)] transition hover:opacity-90"
       >
         {saved ? <Check size={18} /> : null}
-        {saved ? "Saved" : "Save"}
+        {saved ? t("settings.saved") : t("settings.save")}
       </button>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import Papa from "papaparse";
 import Link from "next/link";
 import {
@@ -161,6 +162,7 @@ type Unit = {
 };
 
 export default function GeneratePage() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<Row[]>([newRow()]);
   const [hasKey, setHasKey] = useState(true);
   const [running, setRunning] = useState(false);
@@ -447,11 +449,9 @@ export default function GeneratePage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            Generate descriptions
+            {t("generate.title")}
           </h1>
-          <p className="mt-1 text-muted">
-            Import a CSV or add your products manually.
-          </p>
+          <p className="mt-1 text-muted">{t("generate.subtitle")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <input
@@ -469,26 +469,26 @@ export default function GeneratePage() {
             onClick={() => fileRef.current?.click()}
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm transition hover:bg-surface-2"
           >
-            <Upload size={16} /> Import CSV
+            <Upload size={16} /> {t("generate.importCsv")}
           </button>
           <button
             onClick={() => setRows((rs) => [...rs, newRow()])}
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm transition hover:bg-surface-2"
           >
-            <Plus size={16} /> Row
+            <Plus size={16} /> {t("generate.row")}
           </button>
           <button
             onClick={exportCsv}
             disabled={doneCount === 0}
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm transition hover:bg-surface-2 disabled:opacity-40"
           >
-            <Download size={16} /> Export
+            <Download size={16} /> {t("generate.export")}
           </button>
           <button
             onClick={clearAll}
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-muted transition hover:bg-surface-2 hover:text-danger"
           >
-            <Eraser size={16} /> Clear
+            <Eraser size={16} /> {t("generate.clear")}
           </button>
         </div>
       </div>
@@ -497,11 +497,11 @@ export default function GeneratePage() {
         <div className="flex items-center gap-3 rounded-xl border border-danger/40 bg-danger/10 p-4 text-sm">
           <TriangleAlert className="shrink-0 text-danger" size={18} />
           <span>
-            No API key configured.{" "}
+            {t("generate.noKeyPrefix")}{" "}
             <Link href="/settings" className="font-medium text-brand-2 underline">
-              Add it in Settings
+              {t("generate.addKeyLink")}
             </Link>{" "}
-            to generate.
+            {t("generate.noKeySuffix")}
           </span>
         </div>
       )}
@@ -532,18 +532,20 @@ export default function GeneratePage() {
           size={18}
           className={`mx-auto mb-1.5 ${dragging ? "text-brand-2" : ""}`}
         />
-        {dragging
-          ? "Drop the file to import it"
-          : "Drag & drop a CSV here, or click to browse"}
+        {dragging ? t("generate.dropActive") : t("generate.dropHint")}
       </div>
 
       <div className="glass overflow-hidden rounded-2xl">
         <table className="w-full border-collapse text-sm">
           <thead className="bg-surface-2 text-left text-muted">
             <tr>
-              <th className="w-1/5 px-4 py-3 font-medium">Product</th>
-              <th className="w-1/5 px-4 py-3 font-medium">Attributes</th>
-              <th className="px-4 py-3 font-medium">SEO content pack</th>
+              <th className="w-1/5 px-4 py-3 font-medium">
+                {t("generate.colProduct")}
+              </th>
+              <th className="w-1/5 px-4 py-3 font-medium">
+                {t("generate.colAttributes")}
+              </th>
+              <th className="px-4 py-3 font-medium">{t("generate.colPack")}</th>
               <th className="w-10 px-2 py-3" />
             </tr>
           </thead>
@@ -563,7 +565,7 @@ export default function GeneratePage() {
                     <input
                       value={row.name}
                       onChange={(e) => updateRow(row.id, { name: e.target.value })}
-                      placeholder="Ceramic mug"
+                      placeholder={t("generate.productPlaceholder")}
                       className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
                     />
                     <input
@@ -571,7 +573,7 @@ export default function GeneratePage() {
                       onChange={(e) =>
                         updateRow(row.id, { keyword: e.target.value })
                       }
-                      placeholder="Target keyword (SEO, optional)"
+                      placeholder={t("generate.keywordPlaceholder")}
                       className="mt-1.5 w-full rounded-md border border-border bg-surface px-2 py-1 text-xs text-muted outline-none focus:border-brand-2 focus:text-foreground"
                     />
                     <div className="mt-1.5 flex items-center gap-2">
@@ -586,14 +588,14 @@ export default function GeneratePage() {
                           <button
                             onClick={() => updateRow(row.id, { image: undefined })}
                             className="rounded p-1 text-muted hover:text-danger"
-                            aria-label="Remove image"
+                            aria-label={t("generate.removeImage")}
                           >
                             <X size={14} />
                           </button>
                         </>
                       ) : (
                         <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs text-muted transition hover:text-foreground">
-                          <ImagePlus size={14} /> Image
+                          <ImagePlus size={14} /> {t("generate.image")}
                           <input
                             type="file"
                             accept="image/*"
@@ -614,7 +616,7 @@ export default function GeneratePage() {
                       onChange={(e) =>
                         updateRow(row.id, { attributes: e.target.value })
                       }
-                      placeholder="color: blue, 350ml"
+                      placeholder={t("generate.attrPlaceholder")}
                       className="w-full rounded-md border border-border bg-surface px-2 py-1.5 outline-none focus:border-brand-2"
                     />
                   </td>
@@ -631,7 +633,8 @@ export default function GeneratePage() {
                           )}
                           {status === "loading" ? (
                             <span className="flex items-center gap-2 text-brand-2">
-                              <Loader2 className="animate-spin" size={14} /> Forging…
+                              <Loader2 className="animate-spin" size={14} />{" "}
+                              {t("generate.forging")}
                             </span>
                           ) : status === "error" ? (
                             <span className="text-danger">{cell?.error}</span>
@@ -646,7 +649,7 @@ export default function GeneratePage() {
                                 <div className="space-y-2 rounded-lg border border-border/60 bg-surface/40 p-2">
                                   {show("title", !!f.title) && (
                                     <FieldBlock
-                                      label="Title"
+                                      label={t("generate.fieldTitle")}
                                       value={f.title}
                                       onChange={(v) =>
                                         updateCellFields(row.id, lang, { title: v })
@@ -655,7 +658,7 @@ export default function GeneratePage() {
                                   )}
                                   {show("description", !!f.description) && (
                                     <FieldBlock
-                                      label="Description"
+                                      label={t("generate.fieldDescription")}
                                       value={f.description}
                                       rows={f.description ? 4 : 1}
                                       onChange={(v) =>
@@ -667,7 +670,7 @@ export default function GeneratePage() {
                                   )}
                                   {show("bullets", f.bullets.length > 0) && (
                                     <FieldBlock
-                                      label="Bullets (one per line)"
+                                      label={t("generate.fieldBullets")}
                                       value={f.bullets.join("\n")}
                                       rows={f.bullets.length || 1}
                                       onChange={(v) =>
@@ -685,7 +688,7 @@ export default function GeneratePage() {
                                     !!f.metaDescription,
                                   ) && (
                                     <FieldBlock
-                                      label="Meta description"
+                                      label={t("generate.fieldMeta")}
                                       value={f.metaDescription}
                                       rows={f.metaDescription ? 2 : 1}
                                       onChange={(v) =>
@@ -697,7 +700,7 @@ export default function GeneratePage() {
                                   )}
                                   {show("keywords", f.keywords.length > 0) && (
                                     <FieldBlock
-                                      label="Keywords (comma separated)"
+                                      label={t("generate.fieldKeywords")}
                                       value={f.keywords.join(", ")}
                                       onChange={(v) =>
                                         updateCellFields(row.id, lang, {
@@ -725,7 +728,7 @@ export default function GeneratePage() {
                         )
                       }
                       className="rounded p-1 text-muted hover:text-danger"
-                      aria-label="Delete"
+                      aria-label={t("generate.delete")}
                     >
                       <Trash2 size={16} />
                     </button>
@@ -741,13 +744,16 @@ export default function GeneratePage() {
         <div className="min-w-[12rem] flex-1 space-y-2">
           <div className="flex items-center justify-between text-sm text-muted">
             <span>
-              {doneCount} / {total} generated
+              {t("generate.generated", { done: doneCount, total })}
               {failedCount > 0 && (
-                <span className="ml-2 text-danger">· {failedCount} failed</span>
+                <span className="ml-2 text-danger">
+                  {" "}
+                  {t("generate.failed", { count: failedCount })}
+                </span>
               )}
             </span>
             <span>
-              Est. cost{" "}
+              {t("generate.estCost")}{" "}
               <span className="font-medium text-foreground">
                 ~{fmtCost(estCost)}
               </span>
@@ -767,7 +773,7 @@ export default function GeneratePage() {
               disabled={running}
               className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 font-medium transition hover:bg-surface-2 disabled:opacity-60"
             >
-              <RefreshCw size={16} /> Retry failed
+              <RefreshCw size={16} /> {t("generate.retryFailed")}
             </button>
           )}
           <button
@@ -776,7 +782,7 @@ export default function GeneratePage() {
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand-amber px-5 py-2.5 font-medium text-white shadow-[0_8px_30px_-8px_rgba(249,115,22,0.7)] transition hover:opacity-90 disabled:opacity-60"
           >
             {running && <Loader2 className="animate-spin" size={18} />}
-            {running ? "Generating…" : "Generate all"}
+            {running ? t("generate.generating") : t("generate.generateAll")}
           </button>
         </div>
       </div>

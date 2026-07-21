@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Boxes, Coins, Cpu, Trash2 } from "lucide-react";
 import {
   getUsage,
@@ -60,6 +61,7 @@ function bucketOf(d: Date, period: Period): { key: string; label: string } {
 }
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const [usage, setUsage] = useState<UsageRecord[]>([]);
   const [period, setPeriod] = useState<Period>("day");
 
@@ -106,17 +108,17 @@ export default function DashboardPage() {
   const cards = [
     {
       icon: Boxes,
-      label: "Descriptions generated",
+      label: t("dashboard.cardDescriptions"),
       node: <CountUp value={totals.count} />,
     },
     {
       icon: Cpu,
-      label: "Tokens used",
+      label: t("dashboard.cardTokens"),
       node: <CountUp value={totals.inputTokens + totals.outputTokens} />,
     },
     {
       icon: Coins,
-      label: "Estimated total cost",
+      label: t("dashboard.cardCost"),
       node: (
         <CountUp
           value={totals.costUsd}
@@ -131,17 +133,17 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Usage</h1>
-          <p className="mt-1 text-muted">
-            Track your generations and estimated AI cost (based on your key).
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {t("dashboard.title")}
+          </h1>
+          <p className="mt-1 text-muted">{t("dashboard.subtitle")}</p>
         </div>
         {usage.length > 0 && (
           <button
             onClick={reset}
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-muted transition hover:text-danger"
           >
-            <Trash2 size={16} /> Reset
+            <Trash2 size={16} /> {t("dashboard.reset")}
           </button>
         )}
       </div>
@@ -165,15 +167,16 @@ export default function DashboardPage() {
 
       {usage.length === 0 ? (
         <div className="glass rounded-2xl border-dashed p-10 text-center text-muted">
-          No generations yet. Create your first description in the “Generate”
-          tab.
+          {t("dashboard.empty")}
         </div>
       ) : (
         <>
           <div className="glass rounded-2xl p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-sm font-medium text-muted">
-                Estimated cost per {period}
+                {t("dashboard.chartTitle", {
+                  period: t(`dashboard.periodSingular.${period}`),
+                })}
               </h2>
               <div className="flex gap-1 rounded-lg border border-border bg-surface p-0.5">
                 {PERIODS.map((p) => (
@@ -186,7 +189,7 @@ export default function DashboardPage() {
                         : "text-muted hover:text-foreground"
                     }`}
                   >
-                    {p.label}
+                    {t(`dashboard.periods.${p.id}`)}
                   </button>
                 ))}
               </div>
@@ -214,11 +217,15 @@ export default function DashboardPage() {
             <table className="w-full border-collapse text-sm">
               <thead className="bg-surface-2 text-left text-muted">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Provider</th>
-                  <th className="px-4 py-3 font-medium">Model</th>
-                  <th className="px-4 py-3 font-medium">Tokens (in / out)</th>
-                  <th className="px-4 py-3 font-medium">Cost</th>
+                  <th className="px-4 py-3 font-medium">{t("dashboard.thDate")}</th>
+                  <th className="px-4 py-3 font-medium">
+                    {t("dashboard.thProvider")}
+                  </th>
+                  <th className="px-4 py-3 font-medium">{t("dashboard.thModel")}</th>
+                  <th className="px-4 py-3 font-medium">
+                    {t("dashboard.thTokens")}
+                  </th>
+                  <th className="px-4 py-3 font-medium">{t("dashboard.thCost")}</th>
                 </tr>
               </thead>
               <tbody>

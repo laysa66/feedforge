@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import Nav from "@/components/Nav";
+import Footer from "@/components/Footer";
+import I18nProvider from "@/components/I18nProvider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -30,13 +32,13 @@ export default function RootLayout({
       className={`${inter.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <Nav />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
-          {children}
-        </main>
-        <footer className="border-t border-border px-5 py-6 text-center text-sm text-muted">
-          FeedForge · Your keys and data never leave your browser.
-        </footer>
+        <I18nProvider>
+          <Nav />
+          <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
+            {children}
+          </main>
+          <Footer />
+        </I18nProvider>
       </body>
     </html>
   );
